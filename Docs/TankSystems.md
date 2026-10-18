@@ -192,8 +192,6 @@ Run them from *Session Frontend → Automation*, filter `Tank`, or from the comm
 
 ## Implementation log
 
-- **Cleanup.** The abandoned food-cutting project, its backup, its zip and its Claude memory notes were removed (with
-  approval). The general Unreal notes were kept.
 - **Project changes.**
   - Git was initialised: commit `6ef5ce2` is the untouched template.
   - The project was converted to Blueprint + C++ (module `TankGameVR`).
