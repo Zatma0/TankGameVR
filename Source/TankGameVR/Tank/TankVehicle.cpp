@@ -4,7 +4,10 @@
 #include "Cockpit/TankSeatComponent.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "UI/CockpitDisplayWidget.h"
+#include "UI/TankStatusHudWidget.h"
 #include "TankGameVR.h"
+#include "Blueprint/UserWidget.h"
+#include "Camera/CameraComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/WidgetComponent.h"
 #include "EnhancedInputComponent.h"
@@ -12,6 +15,8 @@
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "HeadMountedDisplayFunctionLibrary.h"
 #include "InputMappingContext.h"
 
 ATankVehicle::ATankVehicle()
@@ -74,6 +79,26 @@ ATankVehicle::ATankVehicle()
 	Display->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Display->SetTwoSided(false);
 	Display->SetTickWhenOffscreen(true);
+
+	// Overview camera: 15 m behind and above the hull, looking down at it. Only used while the tank is the view target.
+	OverviewArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("OverviewArm"));
+	OverviewArm->SetupAttachment(HullCollision);
+	OverviewArm->SetRelativeLocation(FVector(0.0, 0.0, 150.0));
+	OverviewArm->SetRelativeRotation(FRotator(-40.0, 0.0, 0.0));
+	OverviewArm->TargetArmLength = 1500.0f;
+	OverviewArm->bDoCollisionTest = false;
+	OverviewArm->bInheritPitch = false;
+	OverviewArm->bInheritRoll = false;
+	OverviewArm->bEnableCameraLag = true;
+	OverviewArm->CameraLagSpeed = 6.0f;
+	OverviewArm->bEnableCameraRotationLag = true;
+	OverviewArm->CameraRotationLagSpeed = 4.0f;
+
+	OverviewCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("OverviewCamera"));
+	OverviewCamera->SetupAttachment(OverviewArm, USpringArmComponent::SocketName);
+	OverviewCamera->SetFieldOfView(80.0f);
+
+	OverviewHudClass = UTankStatusHudWidget::StaticClass();
 }
 
 void ATankVehicle::BeginPlay()
@@ -97,6 +122,11 @@ void ATankVehicle::BeginPlay()
 
 void ATankVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (OverviewHud)
+	{
+		OverviewHud->RemoveFromParent();
+		OverviewHud = nullptr;
+	}
 	if (APlayerController* PC = InputController.Get())
 	{
 		if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
@@ -150,6 +180,57 @@ void ATankVehicle::HandleBoarded(APawn* Pawn)
 		EnhancedInput->BindAction(AimAction, ETriggerEvent::Triggered, this, &ATankVehicle::OnAimAction);
 		EnhancedInput->BindAction(AimAction, ETriggerEvent::Completed, this, &ATankVehicle::OnAimReleased);
 	}
+	if (ToggleViewAction)
+	{
+		EnhancedInput->BindAction(ToggleViewAction, ETriggerEvent::Started, this, &ATankVehicle::OnToggleView);
+	}
+}
+
+void ATankVehicle::OnToggleView(const FInputActionValue& Value)
+{
+	ToggleOverviewView();
+}
+
+void ATankVehicle::SetOverviewView(bool bEnable)
+{
+	bOverviewView = bEnable;
+
+	APlayerController* PC = InputController.Get();
+	if (!PC && GetWorld())
+	{
+		PC = GetWorld()->GetFirstPlayerController();
+	}
+	if (PC)
+	{
+		AActor* ViewTarget = bEnable ? static_cast<AActor*>(this) : static_cast<AActor*>(Seat->GetRider());
+		if (!ViewTarget)
+		{
+			ViewTarget = PC->GetPawn();
+		}
+		if (ViewTarget)
+		{
+			const bool bHeadset = UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled();
+			PC->SetViewTargetWithBlend(ViewTarget, bHeadset ? 0.0f : ViewBlendTime, VTBlend_Cubic);
+		}
+	}
+
+	if (bEnable && !OverviewHud && OverviewHudClass && GetWorld())
+	{
+		OverviewHud = (PC && PC->GetLocalPlayer()) ? CreateWidget<UUserWidget>(PC, OverviewHudClass) : CreateWidget<UUserWidget>(GetWorld(), OverviewHudClass);
+		if (UTankStatusHudWidget* StatusHud = Cast<UTankStatusHudWidget>(OverviewHud))
+		{
+			StatusHud->SetTank(this);
+		}
+		if (OverviewHud && PC && PC->GetLocalPlayer() && GetWorld()->GetGameViewport())
+		{
+			OverviewHud->AddToViewport(10);
+		}
+	}
+	if (OverviewHud)
+	{
+		OverviewHud->SetVisibility(bEnable ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	UE_LOG(LogTankGame, Log, TEXT("%s view: %s"), *GetName(), bEnable ? TEXT("overview camera") : TEXT("cockpit"));
 }
 
 void ATankVehicle::OnDriveAction(const FInputActionValue& Value)

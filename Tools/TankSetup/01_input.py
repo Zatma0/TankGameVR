@@ -18,15 +18,16 @@ def get_or_create(name, cls, factory):
     return tools.create_asset(name, DIR, cls, factory)
 
 
-def make_action(name):
+def make_action(name, value_type=unreal.InputActionValueType.AXIS2D):
     action = get_or_create(name, unreal.InputAction, unreal.InputAction_Factory())
-    action.set_editor_property("value_type", unreal.InputActionValueType.AXIS2D)
+    action.set_editor_property("value_type", value_type)
     eal.save_loaded_asset(action)
     return action
 
 
 drive = make_action("IA_Tank_Drive")
 aim = make_action("IA_Tank_Aim")
+toggle_view = make_action("IA_Tank_ToggleView", unreal.InputActionValueType.BOOLEAN)
 
 imc = get_or_create("IMC_Tank", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
 imc.unmap_all()
@@ -71,6 +72,10 @@ add(aim, "Right")
 add(aim, "Left", negate=True)
 add(aim, "Up", swizzle=True)
 add(aim, "Down", swizzle=True, negate=True)
+
+# Cockpit / overview camera switch.
+for key in ["C", "Gamepad_FaceButton_Top", "OculusTouch_Left_X_Click", "PICO_Left_X_Click", "ValveIndex_Left_B_Click"]:
+    add(toggle_view, key)
 
 apply_modifiers()
 eal.save_loaded_asset(imc)

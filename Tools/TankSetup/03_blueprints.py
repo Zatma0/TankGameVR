@@ -145,6 +145,7 @@ def build_player_tank():
     cdo.set_editor_property("tank_mapping_context", unreal.load_asset("/Game/TankGame/Input/IMC_Tank"))
     cdo.set_editor_property("drive_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Drive"))
     cdo.set_editor_property("aim_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Aim"))
+    cdo.set_editor_property("toggle_view_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_ToggleView"))
     compile_save(bp)
     return bp
 

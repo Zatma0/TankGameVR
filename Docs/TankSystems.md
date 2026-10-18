@@ -8,8 +8,8 @@ The project is UE 5.8.3 and the VR Template is used unchanged. `BP_XRPawn` and i
 
 - **Headset:** open `Content/TankGame/Maps/LV_TankTest` and press **VR Preview**. The VR pawn boards the tank's seat
   automatically.
-- **Without a headset:** press **Simulate** (Alt+S). Enemy waves arrive and the cockpit display locks on by itself.
-  Use the editor camera to look around.
+- **Without a headset:** press **Play**. You sit in the cockpit at eye height (about 1 s after start); drive with
+  WASD, aim with the arrow keys, press **C** for the overview camera. Click into the game window first.
 - **Watching on the monitor during VR:** press **Tab** in the game window. This toggles the VR Template spectator
   camera; move it with WASD/QE and the mouse.
 
@@ -20,6 +20,13 @@ The project is UE 5.8.3 and the VR Template is used unchanged. `BP_XRPawn` and i
 | Drive: push right/left = curve right/left, forward/back = throttle/reverse | grip the **left (blue) cockpit stick** and tilt it | left thumbstick | W A S D |
 | Aim: flick right/left = next target on that side; with Aim Assist off, moves the aim | grip the **right (orange) cockpit stick** | right thumbstick | arrow keys |
 | Aim Assist On/Off | VR menu (B / Menu button) → **Aim Assist: On/Off** | | |
+| Cockpit view ↔ overview camera | X button (Quest/PICO left), B (Index left) | gamepad Y | C |
+
+The overview camera hangs about 15 m behind and above the tank, follows its heading with a little lag and shows a
+status panel (speed, turn rate, Aim Assist, current target, targets in the area). With a headset the switch is an
+instant cut; on a monitor it blends in 0.35 s (`ViewBlendTime`). The boom (`OverviewArm`) and panel class
+(`OverviewHudClass`) can be changed in `BP_PlayerTank`. The status panel is a screen widget, so it shows on the
+monitor, not inside the headset.
 
 A held cockpit stick always wins. When it is not held, the thumbstick drives the stick and its visual tilt.
 While seated, `IMC_Tank` (priority 10) takes over the thumbstick axes that the template uses for teleport and snap
@@ -38,6 +45,7 @@ UTankMovementComponent                        UTankTargetingComponent ──sett
                                                 UTargetRegistrySubsystem <──register── UTargetableComponent (on enemies)
 UCockpitDisplayWidget (UMG on a Widget Component) reads targeting state ──> crosshair, markers, text
 UAimAssistToggleWidget (inside the template's WBP_Menu) ──> UTankSettingsSubsystem
+OverviewArm/OverviewCamera on ATankVehicle + UTankStatusHudWidget (screen) ──> overview view
 ```
 
 | Responsibility | Where |
@@ -151,7 +159,7 @@ Code is in `Source/TankGameVR/{Tank,Cockpit,Targeting,Settings,UI,Testing,Tests}
   - `Tank.DestroyTarget`: destroys the locked target.
   - `Tank.NextWave`: clears the current wave and spawns the next one.
 
-## Automated tests (20, all passing)
+## Automated tests (21, all passing)
 
 Run them from *Session Frontend → Automation*, filter `Tank`, or from the command line:
 `UnrealEditor-Cmd.exe TankGameVR.uproject -ExecCmds="Automation RunTests Tank;Quit" -unattended -nullrhi`
@@ -161,7 +169,7 @@ Run them from *Session Frontend → Automation*, filter `Tank`, or from the comm
 | Movement | Input shaping, small vs. large curves left and right, no sideways slip, no pivoting, throttle, reverse, neutral stop, ground height, 30/90/144 fps consistency, blocked by a wall |
 | Targeting | Projection (centre, edges, behind, NaN), registry lifecycle, left/right cycling with no wrap, no jitter and controlled repeat, destroyed targets and new waves, range and angle limits, line of sight, aim recentring, Aim Assist on/off (live and persisted), crosshair following the target |
 | Cockpit | Stick from a hand (no jump on grab, deflection, spring back, priority over the thumbstick) |
-| Content | `IMC_Tank` overrides the template's teleport and turn keys; `BP_PlayerTank` setup; the real template `TryGrab` on a stick steers the tank; the real `BP_XRPawn` rides in the seat; waves keep getting locked; the menu toggle works |
+| Content | `IMC_Tank` overrides the template's teleport and turn keys; `BP_PlayerTank` setup; the real template `TryGrab` on a stick steers the tank; the real `BP_XRPawn` rides in the seat; waves keep getting locked; the menu toggle works; the overview camera sits behind and above the tank, follows it, shows the status panel and switches back |
 
 ## Manual VR checklist (needs a headset)
 
@@ -187,7 +195,9 @@ Run them from *Session Frontend → Automation*, filter `Tank`, or from the comm
 6. Open the menu (B / Menu button), point at **Aim Assist: On** and click.
    - It changes to Off, the lock clears, and the orange stick now moves the crosshair freely.
    - Restart the game: the setting is still Off.
-7. If the eye height feels wrong, use **Reset Orientation** in the menu. Seat calibration runs about 1 s after
+7. Press X (left controller): the view cuts to the overview camera above the tank; press again to return to the
+   cockpit. Check that the cut is comfortable.
+8. If the eye height feels wrong, use **Reset Orientation** in the menu. Seat calibration runs about 1 s after
    boarding.
 
 ## Implementation log
@@ -196,7 +206,7 @@ Run them from *Session Frontend → Automation*, filter `Tank`, or from the comm
   - Git was initialised: commit `6ef5ce2` is the untouched template.
   - The project was converted to Blueprint + C++ (module `TankGameVR`).
   - `XRBase` was listed explicitly in the `.uproject`.
-- **New code.** `Source/TankGameVR/**`: 14 classes and 4 test files. The game build compiles without editor code.
+- **New code.** `Source/TankGameVR/**`: 15 classes and 4 test files. The game build compiles without editor code.
 - **New content.**
   - `Content/TankGame/**`: input, materials, `BP_PlayerTank`, enemy placeholders, the test spawner, `LV_TankTest`.
   - The engine sky sphere is used in the test map.

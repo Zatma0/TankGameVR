@@ -58,6 +58,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tank|Drive")
 	FVector GetTankVelocity() const { return GetForwardVector() * CurrentSpeed; }
 
+	/** cm/s along the hull, negative when reversing. */
+	UFUNCTION(BlueprintPure, Category = "Tank|Drive")
+	float GetCurrentSpeed() const { return CurrentSpeed; }
+
+	/** deg/s, positive = turning right. */
+	UFUNCTION(BlueprintPure, Category = "Tank|Drive")
+	float GetCurrentTurnRate() const { return CurrentTurnRate; }
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Tank|State")
 	FVector2D RawInput = FVector2D::ZeroVector;
 

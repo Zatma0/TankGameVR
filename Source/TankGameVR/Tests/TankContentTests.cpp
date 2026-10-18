@@ -14,6 +14,7 @@
 #include "Targeting/TargetableComponent.h"
 #include "Testing/TankTestWaveSpawner.h"
 #include "UI/AimAssistToggleWidget.h"
+#include "UI/TankStatusHudWidget.h"
 #include "UI/CockpitDisplayWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
@@ -25,6 +26,7 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "MotionControllerComponent.h"
 #include "UObject/StructOnScope.h"
@@ -100,11 +102,19 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TSet<FKey> TankKeys;
+	TSet<FKey> ToggleViewKeys;
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
+		if (Mapping.Action && Mapping.Action->GetName() == TEXT("IA_Tank_ToggleView"))
+		{
+			ToggleViewKeys.Add(Mapping.Key);
+			TestEqual(TEXT("view toggle is a button"), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Boolean));
+			continue;
+		}
 		TankKeys.Add(Mapping.Key);
 		TestEqual(TEXT("tank actions are 2D axes"), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Axis2D));
 	}
+	TestTrue(TEXT("view toggle on C and gamepad Y"), ToggleViewKeys.Contains(EKeys::C) && ToggleViewKeys.Contains(EKeys::Gamepad_FaceButton_Top));
 	// Every key the template uses for teleport/snap turn must be claimed while seated.
 	for (const FEnhancedActionKeyMapping& Mapping : TemplateContext->GetMappings())
 	{
@@ -113,6 +123,8 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		{
 			TestTrue(FString::Printf(TEXT("%s key %s is overridden by the tank"), *ActionName, *Mapping.Key.ToString()), TankKeys.Contains(Mapping.Key));
 		}
+		// The view toggle must not steal a button the template uses (menu, grab, teleport...).
+		TestFalse(FString::Printf(TEXT("view toggle key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), ToggleViewKeys.Contains(Mapping.Key));
 	}
 	TestTrue(TEXT("keyboard drive fallback"), TankKeys.Contains(EKeys::W) && TankKeys.Contains(EKeys::D));
 	TestTrue(TEXT("keyboard aim fallback"), TankKeys.Contains(EKeys::Left) && TankKeys.Contains(EKeys::Right));
@@ -124,6 +136,10 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	};
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
+		if (ToggleViewKeys.Contains(Mapping.Key))
+		{
+			continue;
+		}
 		FInputActionValue Value(EInputActionValueType::Axis2D, FVector(1.0, 0.0, 0.0));
 		for (UInputModifier* Modifier : Mapping.Modifiers)
 		{
@@ -159,6 +175,7 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("mapping context assigned"), Tank->TankMappingContext.Get());
 	TestNotNull(TEXT("drive action assigned"), Tank->DriveAction.Get());
 	TestNotNull(TEXT("aim action assigned"), Tank->AimAction.Get());
+	TestNotNull(TEXT("view toggle action assigned"), Tank->ToggleViewAction.Get());
 	TestTrue(TEXT("display uses the cockpit display widget"), Cast<UCockpitDisplayWidget>(Tank->GetDisplay()->GetWidget()) != nullptr);
 
 	for (const TCHAR* KnobName : { TEXT("DriveKnob"), TEXT("AimKnob") })
@@ -265,6 +282,63 @@ bool FTankContentBoardingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("rider stays in the seat while the tank drives and turns"), FVector::Dist2D(Pawn->GetActorLocation(), Seat->GetComponentLocation()) < 1.0);
 	TestTrue(TEXT("rider's frame turns with the hull (camera itself is never rotated by code)"),
 		FMath::IsNearlyEqual(FRotator::NormalizeAxis(Pawn->GetActorRotation().Yaw - Tank->GetActorRotation().Yaw), 0.0f, 0.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankContentOverviewCameraTest, "Tank.Content.OverviewCamera", TankTestFlags)
+bool FTankContentOverviewCameraTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	ATankVehicle* Tank = SpawnPlayerTank(Test);
+	APlayerController* PC = Test.World->SpawnActor<APlayerController>();
+	APawn* Pawn = Test.World->SpawnActor<APawn>(LoadBlueprintClass(TEXT("/Game/XRFramework/Blueprints/BP_XRPawn")), FTransform(FVector(-500, 0, 0)));
+	if (!TestNotNull(TEXT("BP_XRPawn spawns"), Pawn) || !TestNotNull(TEXT("BP_PlayerTank spawns"), Tank))
+	{
+		return false;
+	}
+	// No possession: the seat boards the pawn directly and the tank falls back to the first player controller.
+	Test.Tick(0.1f);
+	Tank->FindComponentByClass<UTankSeatComponent>()->Board(Pawn);
+	Test.Tick(0.2f);
+	TestFalse(TEXT("starts in the cockpit view"), Tank->IsOverviewViewActive());
+
+	// The overview camera sits above and behind the hull, looking down at it.
+	const UCameraComponent* Camera = Tank->GetOverviewCamera();
+	if (TestNotNull(TEXT("overview camera"), Camera))
+	{
+		const FVector Local = Tank->GetActorTransform().InverseTransformPosition(Camera->GetComponentLocation());
+		TestTrue(FString::Printf(TEXT("camera above the tank (%.0f cm)"), Local.Z), Local.Z > 500.0);
+		TestTrue(FString::Printf(TEXT("camera behind the tank (%.0f cm)"), Local.X), Local.X < -500.0);
+		const FVector ToTank = (Tank->GetActorLocation() - Camera->GetComponentLocation()).GetSafeNormal();
+		TestTrue(TEXT("camera looks at the tank"), FVector::DotProduct(Camera->GetForwardVector(), ToTank) > 0.9);
+	}
+
+	Tank->SetOverviewView(true);
+	Tank->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+	Test.Tick(1.0f);
+	TestTrue(TEXT("overview active"), Tank->IsOverviewViewActive());
+	TestTrue(TEXT("player views through the tank's camera"), PC->PlayerCameraManager && PC->PlayerCameraManager->GetViewTarget() == Tank);
+	UTankStatusHudWidget* Hud = Cast<UTankStatusHudWidget>(Tank->GetOverviewHud());
+	if (TestNotNull(TEXT("status panel created"), Hud))
+	{
+		Hud->UpdateStatus();
+		const FString Status = Hud->GetStatusString();
+		TestTrue(FString::Printf(TEXT("status shows the speed (%s)"), *Status), Status.Contains(TEXT("SPEED:")) && !Status.Contains(TEXT("SPEED: 0 km/h")));
+		TestTrue(TEXT("status shows Aim Assist"), Status.Contains(TEXT("AIM ASSIST:")));
+	}
+
+	// The camera keeps following the moving tank.
+	if (Camera)
+	{
+		const double Distance = FVector::Dist(Camera->GetComponentLocation(), Tank->GetActorLocation());
+		TestTrue(FString::Printf(TEXT("camera follows the tank (%.0f cm away)"), Distance), Distance < 2500.0);
+	}
+
+	Tank->ToggleOverviewView();
+	Test.Tick(1.0f);
+	TestFalse(TEXT("back to the cockpit"), Tank->IsOverviewViewActive());
+	TestTrue(TEXT("player views through the rider's camera again"), PC->PlayerCameraManager && PC->PlayerCameraManager->GetViewTarget() == Pawn);
+	TestTrue(TEXT("status panel hidden in the cockpit"), !Hud || Hud->GetVisibility() == ESlateVisibility::Collapsed);
 	return true;
 }
 
