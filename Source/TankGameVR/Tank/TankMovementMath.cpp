@@ -27,7 +27,7 @@ float UTankMovementMath::ComputeTargetSpeed(const FTankDriveTuning& Tuning, floa
 
 	if (Target >= 0.0f)
 	{
-		// Steering on its own drives the tank along a curve instead of pivoting in place.
+		// Steering alone still moves forward (no pivot).
 		if (!Tuning.bAllowPivotTurn)
 		{
 			const float CreepSpeed = Tuning.MinimumMovementSpeedWhileTurning * FMath::Lerp(Tuning.SmallSteerSpeedRatio, 1.0f, SteerAmount);

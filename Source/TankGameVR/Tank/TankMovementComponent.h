@@ -5,12 +5,7 @@
 #include "Tank/TankMovementMath.h"
 #include "TankMovementComponent.generated.h"
 
-/**
- * Kinematic tracked-vehicle movement driven by a single stick (X = steer, Y = throttle).
- * Moves the owner's root component with sweeps: velocity always points along the hull, so there is no
- * sideways sliding, and heading and path stay coherent. It never touches the VR camera; riders attached to
- * the tank simply move with it.
- */
+// Tracked vehicle movement from one stick (X = steer, Y = throttle). Sweeps the root along the hull's forward.
 UCLASS(ClassGroup = (Tank), meta = (BlueprintSpawnableComponent))
 class TANKGAMEVR_API UTankMovementComponent : public UActorComponent
 {
@@ -26,15 +21,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Drive")
 	FVector LocalForwardAxis = FVector::ForwardVector;
 
-	/** Keep the hull at a constant height above the ground below it (no pitch/roll: VR comfort). */
+	/** Keep a constant height above the ground (no pitch/roll). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Ground")
 	bool bFollowGround = true;
 
-	/** Height of the root above the ground. Captured from the placed position at BeginPlay when <= 0. */
+	/** Root height above the ground. <= 0 uses the placed height. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Ground", meta = (Units = "Centimeters"))
 	float RideHeight = 0.0f;
 
-	/** Ground steps larger than this (up or down) are ignored instead of snapping. */
+	/** Ground steps bigger than this are ignored. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Ground", meta = (ClampMin = "1.0", Units = "Centimeters"))
 	float MaxGroundStep = 60.0f;
 
@@ -44,12 +39,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Debug")
 	bool bDebugDraw = false;
 
-	/** Raw stick: X = steering (right +), Y = throttle (forward +). Values are clamped to [-1, 1]. */
+	/** X = steering (right +), Y = throttle (forward +). */
 	UFUNCTION(BlueprintCallable, Category = "Tank|Drive")
 	void SetDriveInput(FVector2D RawStick);
 
-	/** Stops immediately (e.g. when the driver leaves). */
-	UFUNCTION(BlueprintCallable, Category = "Tank|Drive")
+		UFUNCTION(BlueprintCallable, Category = "Tank|Drive")
 	void StopImmediately();
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Drive")

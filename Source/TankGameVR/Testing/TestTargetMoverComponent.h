@@ -4,7 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "TestTargetMoverComponent.generated.h"
 
-/** Test helper: slides the owner back and forth sideways so lock-on and crosshair tracking can be seen moving. */
+// Moves the owner sideways back and forth (for testing lock-on on a moving target).
 UCLASS(ClassGroup = (Testing), meta = (BlueprintSpawnableComponent))
 class TANKGAMEVR_API UTestTargetMoverComponent : public UActorComponent
 {
@@ -16,7 +16,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Test Mover", meta = (Units = "Centimeters"))
 	float Amplitude = 400.0f;
 
-	/** Full back-and-forth cycles per minute. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Test Mover", meta = (ClampMin = "0.0"))
 	float CyclesPerMinute = 4.0f;
 

@@ -5,7 +5,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "TankSettingsSubsystem.generated.h"
 
-/** Persisted player settings (SaveGame slot). Add new options here. */
+// Saved player settings.
 UCLASS()
 class TANKGAMEVR_API UTankSettingsSaveGame : public USaveGame
 {
@@ -21,10 +21,7 @@ public:
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAimAssistSettingChanged, bool, bEnabled);
 
-/**
- * Player settings for the tank game. Loaded from disk when the game instance starts, saved on every change,
- * and broadcast so live systems (targeting, UI) react immediately.
- */
+// Loads the settings at startup, saves on every change and notifies listeners.
 UCLASS()
 class TANKGAMEVR_API UTankSettingsSubsystem : public UGameInstanceSubsystem
 {
@@ -47,15 +44,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Tank|Settings")
 	FOnAimAssistSettingChanged OnAimAssistChanged;
 
-	/** Reloads from the save slot (used by tests and after external changes). */
-	UFUNCTION(BlueprintCallable, Category = "Tank|Settings")
+		UFUNCTION(BlueprintCallable, Category = "Tank|Settings")
 	void LoadSettings();
 
 	UFUNCTION(BlueprintCallable, Category = "Tank|Settings")
 	bool SaveSettings() const;
 
-	/** Lets tests use their own slot instead of the player's real settings. */
-	void SetSaveSlotForTesting(const FString& InSlotName) { SlotName = InSlotName; }
+		void SetSaveSlotForTesting(const FString& InSlotName) { SlotName = InSlotName; }
 
 	static const TCHAR* DefaultSlotName;
 

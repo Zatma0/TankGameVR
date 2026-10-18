@@ -18,7 +18,7 @@ void UTankSeatComponent::BeginPlay()
 	Super::BeginPlay();
 	if (bAutoBoardLocalPlayer)
 	{
-		// The player pawn may be spawned after this actor; board on the next tick.
+		// The pawn may spawn after us.
 		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &UTankSeatComponent::BoardLocalPlayer);
 	}
 }
@@ -59,8 +59,7 @@ void UTankSeatComponent::CalibrateEyeHeight()
 	{
 		return;
 	}
-	// Measure the actual camera: with a headset it carries the real head height, without one (desktop play) it sits
-	// at the tracking origin. Either way, shift the rider so the eyes end up at DesignEyeHeight above the seat.
+	// Without a headset the camera sits at the tracking origin, so this also works on desktop.
 	const float EyeHeight = static_cast<float>(FVector::DotProduct(Camera->GetComponentLocation() - GetComponentLocation(), GetUpVector()));
 	const float CurrentOffset = static_cast<float>(PawnRoot->GetRelativeLocation().Z);
 	const float Offset = FMath::Clamp(CurrentOffset + DesignEyeHeight - EyeHeight, -MaxCalibrationOffset, MaxCalibrationOffset);

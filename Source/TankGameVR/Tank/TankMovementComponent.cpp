@@ -63,22 +63,22 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	{
 		return;
 	}
-	// Long hitches would integrate a huge step; clamp so the tank never jumps.
+	// Avoid big jumps after a hitch.
 	const float Dt = FMath::Min(DeltaTime, 0.1f);
 
-	// 1) Stick shaping: filter, rate limit, dead zone + response curve.
+	// Stick shaping
 	SmoothedInput = UTankMovementMath::SmoothStick(SmoothedInput, RawInput, Dt, Tuning.JoystickSmoothing);
 	LimitedInput = UTankMovementMath::RateLimit(LimitedInput, SmoothedInput, Tuning.InputResponseSpeed, Dt);
 	ProcessedInput.X = UTankMovementMath::ShapeAxis(LimitedInput.X, Tuning.SteeringDeadZone, Tuning.SteeringCurve, Tuning.SteeringSensitivity);
 	ProcessedInput.Y = UTankMovementMath::ShapeAxis(LimitedInput.Y, Tuning.ThrottleDeadZone, Tuning.ThrottleCurve, 1.0f);
 
-	// 2) Desired motion, then smooth integration (speed by accel/decel/brake, turn rate by comfort limit).
+	// Target speed / turn rate, then accelerate toward them
 	TargetSpeed = UTankMovementMath::ComputeTargetSpeed(Tuning, ProcessedInput.X, ProcessedInput.Y);
 	CurrentSpeed = UTankMovementMath::StepSpeed(Tuning, CurrentSpeed, TargetSpeed, Dt);
 	const float TargetTurnRate = UTankMovementMath::ComputeTargetTurnRate(Tuning, ProcessedInput.X, CurrentSpeed);
 	CurrentTurnRate = FMath::FInterpConstantTo(CurrentTurnRate, TargetTurnRate, Dt, Tuning.MaximumTurnAcceleration);
 
-	// 3) Move along the hull's own forward axis (mid-step heading keeps arcs accurate at any frame rate).
+	// Move along the mid-step heading (keeps curves the same at any frame rate).
 	const float YawDelta = CurrentTurnRate * Dt;
 	const FQuat CurrentRotation = Root->GetComponentQuat();
 	const FQuat HalfStep = FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDelta * 0.5f)) * CurrentRotation;
@@ -94,7 +94,7 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	bBlockedLastFrame = Hit.bBlockingHit && !Delta.IsNearlyZero();
 	if (bBlockedLastFrame)
 	{
-		// Driving into something solid: stop instead of sliding sideways along it.
+		// Hit something: stop, don't slide along it.
 		CurrentSpeed = 0.0f;
 	}
 

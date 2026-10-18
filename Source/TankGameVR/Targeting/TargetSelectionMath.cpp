@@ -85,7 +85,7 @@ int32 UTargetSelectionMath::SelectSwitchTarget(const TArray<FTargetCandidate>& C
 
 	if (Best == INDEX_NONE && Tuning.bWrapAround)
 	{
-		// Wrap around: the farthest candidate on the opposite side.
+		// Wrap around
 		Best = PickBest(Candidates,
 			[&](const FTargetCandidate& C) { return C.Target != Current && C.YawOffset * Side <= -Tuning.MinimumSwitchSeparation; },
 			[&](const FTargetCandidate& C) { return -FMath::Abs(C.YawOffset); });
@@ -122,7 +122,7 @@ bool UTankSightMath::ProjectToSight(const FTransform& SightTransform, float Hori
 	}
 	else
 	{
-		// Behind or beside the sight: no valid projection. Point toward the target from the centre instead.
+		// Behind the sight: push it to the edge in the target's direction.
 		Ndc = FVector2D(Local.Y, Local.Z).GetSafeNormal() * 10.0;
 		if (Ndc.IsNearlyZero())
 		{
@@ -133,7 +133,7 @@ bool UTankSightMath::ProjectToSight(const FTransform& SightTransform, float Hori
 	bOnScreen = bInFront && FMath::Abs(Ndc.X) <= 1.0 && FMath::Abs(Ndc.Y) <= 1.0;
 	if (!bOnScreen)
 	{
-		// Clamp to the edge while keeping the direction (the marker sits on the border, pointing at the target).
+		// Clamp to the edge, keeping the direction.
 		const double Scale = 1.0 / FMath::Max(FMath::Abs(Ndc.X), FMath::Abs(Ndc.Y));
 		Ndc *= FMath::Min(Scale, 1.0);
 	}

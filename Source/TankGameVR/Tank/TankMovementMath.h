@@ -4,17 +4,11 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "TankMovementMath.generated.h"
 
-/**
- * Tuning for the single-stick tank drive.
- * Stick X = steering (right positive), stick Y = throttle (forward positive).
- * Speeds are in cm/s, turn rates in deg/s (Unreal units: 1 uu = 1 cm).
- */
+// Drive tuning. Stick X = steering (right +), Y = throttle (forward +). Speeds in cm/s, turn rates in deg/s.
 USTRUCT(BlueprintType)
 struct TANKGAMEVR_API FTankDriveTuning
 {
 	GENERATED_BODY()
-
-	// --- Input shaping -------------------------------------------------------------------------------
 
 	/** Stick deflection (0..1) ignored around the centre for steering. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.0", ClampMax = "0.9"))
@@ -28,22 +22,20 @@ struct TANKGAMEVR_API FTankDriveTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.1", ClampMax = "3.0"))
 	float SteeringSensitivity = 1.0f;
 
-	/** Response exponent: 1 = linear, > 1 = finer control near the centre (gentle small turns). */
+	/** Response exponent: 1 = linear, > 1 = finer control near the centre. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.5", ClampMax = "4.0"))
 	float SteeringCurve = 1.3f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.5", ClampMax = "4.0"))
 	float ThrottleCurve = 1.2f;
 
-	/** Time constant (s) of the exponential filter on the raw stick. 0 = no filtering. */
+	/** Smoothing time on the raw stick, 0 = off. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.0", ClampMax = "0.5", Units = "Seconds"))
 	float JoystickSmoothing = 0.06f;
 
-	/** Maximum change per second of the processed stick values (limits jerky inputs). */
+	/** Max change per second of the processed stick values. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input", meta = (ClampMin = "0.5", ClampMax = "50.0"))
 	float InputResponseSpeed = 5.0f;
-
-	// --- Speed ---------------------------------------------------------------------------------------
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "0.0", Units = "CentimetersPerSecond"))
 	float MaximumForwardSpeed = 450.0f;
@@ -55,15 +47,13 @@ struct TANKGAMEVR_API FTankDriveTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "1.0"))
 	float Acceleration = 150.0f;
 
-	/** Speed loss per second when the stick asks for less speed (coasting down). */
+	/** Speed loss per second when slowing down. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "1.0"))
 	float Deceleration = 220.0f;
 
-	/** Speed loss per second when the stick asks for the opposite direction. */
+	/** Speed loss per second when the stick points the other way. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed", meta = (ClampMin = "1.0"))
 	float BrakingStrength = 400.0f;
-
-	// --- Turning -------------------------------------------------------------------------------------
 
 	/** Turn rate (deg/s) at full steering once the tank moves at TurnRateReferenceSpeed or faster. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "1.0", ClampMax = "180.0"))
@@ -73,43 +63,43 @@ struct TANKGAMEVR_API FTankDriveTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "0.0", ClampMax = "4.0"))
 	float TurnSpeedMultiplier = 1.0f;
 
-	/** Below this speed the available turn rate scales down linearly (a tracked tank turns along a path, not on a coin). */
+	/** Below this speed the turn rate scales down linearly. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "1.0", Units = "CentimetersPerSecond"))
 	float TurnRateReferenceSpeed = 150.0f;
 
-	/** Forward speed reached at full steering with a neutral throttle: steering alone drives the tank along a curve. */
+	/** Forward speed at full steering with no throttle, so steering alone drives along a curve. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "0.0", Units = "CentimetersPerSecond"))
 	float MinimumMovementSpeedWhileTurning = 120.0f;
 
-	/** Fraction of MinimumMovementSpeedWhileTurning used for the smallest steering input (grows to 1 at full steering). */
+	/** Fraction of MinimumMovementSpeedWhileTurning used for small steering inputs. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float SmallSteerSpeedRatio = 0.35f;
 
-	/** Speed cap at full steering; the cap blends from MaximumForwardSpeed as steering increases (tanks slow in sharp turns). */
+	/** Speed cap at full steering. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "0.0", Units = "CentimetersPerSecond"))
 	float MaximumMovementSpeedWhileTurning = 280.0f;
 
-	/** VR comfort: how fast the turn rate itself may change (deg/s per second). */
+	/** How fast the turn rate may change (deg/s per second), for comfort. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning", meta = (ClampMin = "1.0"))
 	float MaximumTurnAcceleration = 90.0f;
 
-	/** Allow turning on the spot (neutral throttle, no forward creep). Off by default. */
+	/** Allow turning on the spot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning")
 	bool bAllowPivotTurn = false;
 
-	/** When reversing, steering right swings the nose left (car-like) instead of right. */
+	/** Car-like steering when reversing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Turning")
 	bool bInvertSteeringInReverse = false;
 };
 
-/** Pure, side-effect free drive math. Used by UTankMovementComponent and the automation tests. */
+// Drive math, kept separate so it can be tested.
 UCLASS()
 class TANKGAMEVR_API UTankMovementMath : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
 public:
-	/** Dead zone, rescale, sensitivity and response curve. Keeps the sign, output in [-1, 1]. */
+	/** Dead zone, sensitivity and response curve. Output in [-1, 1]. */
 	UFUNCTION(BlueprintPure, Category = "Tank|Math")
 	static float ShapeAxis(float Value, float DeadZone, float Curve, float Sensitivity);
 
@@ -121,7 +111,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tank|Math")
 	static float ComputeTargetTurnRate(const FTankDriveTuning& Tuning, float Steering, float CurrentSpeed);
 
-	/** Moves CurrentSpeed toward TargetSpeed using acceleration, deceleration or braking as appropriate. */
+	/** Moves CurrentSpeed toward TargetSpeed using acceleration, deceleration or braking. */
 	UFUNCTION(BlueprintPure, Category = "Tank|Math")
 	static float StepSpeed(const FTankDriveTuning& Tuning, float CurrentSpeed, float TargetSpeed, float DeltaTime);
 

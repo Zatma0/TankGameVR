@@ -4,11 +4,8 @@
 #include "GameFramework/Actor.h"
 #include "TankTestWaveSpawner.generated.h"
 
-/**
- * Minimal wave source for testing the targeting system (not a game wave director).
- * Spawns EnemiesPerWave enemies in an arc in front of the spawner; when all are gone the next wave follows.
- * Enemies can expire on their own (simulated kills). Console: Tank.DestroyTarget, Tank.NextWave.
- */
+// Simple test waves: spawns enemies in an arc in front of it, next wave when all are gone.
+// Console: Tank.DestroyTarget, Tank.NextWave.
 UCLASS(Blueprintable)
 class TANKGAMEVR_API ATankTestWaveSpawner : public AActor
 {
@@ -36,11 +33,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (Units = "Centimeters"))
 	FVector2D SpawnDistance = FVector2D(2500.0, 4500.0);
 
-	/** Width of the arc (deg) enemies spawn in, centred on the spawner's forward direction. */
+	/** Spawn arc width in degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float SpawnArc = 90.0f;
 
-	/** Each enemy removes itself after a random time in this range (0,0 = never). Simulates kills. */
+	/** Enemies disappear after a random time in this range (0,0 = never). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (Units = "Seconds"))
 	FVector2D EnemyLifetime = FVector2D(15.0, 30.0);
 
@@ -50,7 +47,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void SpawnWave();
 
-	/** Destroys the remaining enemies and starts the next wave right away. */
 	UFUNCTION(BlueprintCallable, Category = "Waves")
 	void SkipToNextWave();
 

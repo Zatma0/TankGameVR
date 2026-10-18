@@ -10,12 +10,8 @@ class UTankTargetingComponent;
 class UTextBlock;
 
 /**
- * Cockpit sight display. Shows what the targeting system does: a crosshair at the projected aim direction (it glides
- * onto the locked target), markers for every target (selected / selectable / out of view), Aim Assist state and the
- * current target's name and distance. Rendered on a cockpit screen through a Widget Component.
- *
- * The widget builds a placeholder layout itself; a Blueprint subclass may provide its own widgets instead by naming
- * them Crosshair, StatusText and TargetText. Updating only moves existing widgets (no rebuilds per frame).
+ * Cockpit sight: crosshair, target markers, Aim Assist state and target info.
+ * Builds a default layout; a Blueprint subclass can supply its own Crosshair, StatusText and TargetText.
  */
 UCLASS()
 class TANKGAMEVR_API UCockpitDisplayWidget : public UUserWidget
@@ -23,11 +19,11 @@ class TANKGAMEVR_API UCockpitDisplayWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** Display resolution in slate units; must match the Widget Component's Draw Size. */
+	/** Must match the Widget Component's Draw Size. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display")
 	FVector2D DisplaySize = FVector2D(1024.0, 768.0);
 
-	/** Horizontal field of view (deg) of the virtual sight shown on the display. */
+	/** Horizontal FOV of the sight. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display", meta = (ClampMin = "10.0", ClampMax = "160.0"))
 	float SightFieldOfView = 70.0f;
 
@@ -49,11 +45,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display|Colors")
 	FLinearColor IdleColor = FLinearColor(0.85f, 0.95f, 0.85f);
 
-	/** Connect the display to the tank's targeting system. */
 	UFUNCTION(BlueprintCallable, Category = "Display")
 	void SetTargeting(UTankTargetingComponent* InTargeting);
 
-	/** Crosshair position in display UV (0..1) after the last update. */
+	/** 0..1 */
 	UFUNCTION(BlueprintPure, Category = "Display")
 	FVector2D GetCrosshairUV() const { return CrosshairUV; }
 
@@ -63,7 +58,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Display")
 	FString GetTargetString() const { return LastTargetLine; }
 
-	/** Runs one update immediately (normally done every tick). */
 	UFUNCTION(BlueprintCallable, Category = "Display")
 	void UpdateDisplay();
 

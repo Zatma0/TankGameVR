@@ -65,14 +65,13 @@ void UCockpitDisplayWidget::BuildDefaultLayout()
 	Canvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Canvas"));
 	WidgetTree->RootWidget = Canvas;
 
-	// Dark screen background.
 	UBorder* Background = WidgetTree->ConstructWidget<UBorder>();
 	Background->SetBrushColor(FLinearColor(0.01f, 0.03f, 0.02f, 0.95f));
 	UCanvasPanelSlot* BackgroundSlot = Canvas->AddChildToCanvas(Background);
 	BackgroundSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 	BackgroundSlot->SetOffsets(FMargin(0.0f));
 
-	// Fixed boresight (hull forward) so the player can see how far the aim is offset.
+	// Fixed boresight (hull forward).
 	UBorder* Boresight = MakeRing(InactiveColor, 2.0f, false);
 	UCanvasPanelSlot* BoresightSlot = Canvas->AddChildToCanvas(Boresight);
 	BoresightSlot->SetSize(FVector2D(24.0, 24.0));
@@ -140,13 +139,12 @@ void UCockpitDisplayWidget::UpdateDisplay()
 	const UTargetableComponent* Current = Targeting_->GetCurrentTarget();
 	const bool bAssist = Targeting_->IsAimAssistEnabled();
 
-	// Crosshair: projection of the actual aim direction, so it visibly glides onto the selected target.
+	// Crosshair follows the real (smoothed) aim direction.
 	bool bCrosshairOnScreen = false;
 	UTankSightMath::ProjectToSight(Sight, SightFieldOfView, Aspect, Targeting_->GetAimOrigin() + Targeting_->GetAimDirection() * 100000.0, CrosshairUV, bCrosshairOnScreen);
 	PlaceCentered(Crosshair, CrosshairUV, CrosshairSize);
 	SetRingColor(Crosshair, Current ? LockedColor : (bAssist ? IdleColor : ManualColor));
 
-	// Target markers.
 	TArray<UTargetableComponent*> Targets;
 	if (UTargetRegistrySubsystem* Registry = UTargetRegistrySubsystem::Get(Targeting_))
 	{
@@ -187,7 +185,6 @@ void UCockpitDisplayWidget::UpdateDisplay()
 		Markers[Index]->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	// Text lines.
 	LastStatus = FString::Printf(TEXT("AIM ASSIST: %s"), bAssist ? TEXT("ON") : TEXT("OFF"));
 	if (Current)
 	{

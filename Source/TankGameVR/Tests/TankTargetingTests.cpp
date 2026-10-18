@@ -232,7 +232,7 @@ bool FTankTargetLifecycleTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankOcclusionTest, "Tank.Targeting.LineOfSightAndRecenter", TankTestFlags)
 bool FTankOcclusionTest::RunTest(const FString& Parameters)
 {
-	// A target hidden behind a wall is neither locked nor shown as selectable; it becomes lockable once visible.
+	// Hidden behind a wall: not lockable until visible.
 	FTargetScene Scene({ 0 });
 	AActor* Wall = Scene.Test.SpawnBlock(FVector(1500, 0, 200), FVector(0.5, 8, 4));
 	Scene.Test.Tick(1.0f);
@@ -329,7 +329,7 @@ bool FTankCrosshairTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("display shows the target"), Display->GetTargetString().Contains(TEXT("T-10")));
 	TestTrue(TEXT("display shows assist state"), Display->GetStatusString().Contains(TEXT("ON")));
 
-	// Switch right: the crosshair travels across over several frames (visible transition), then settles.
+	// Crosshair moves over several frames, then settles.
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D(1.0, 0.0));
 	Scene.Test.Wrapper.TickTestWorld(1.0f / 90.0f);
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D::ZeroVector);

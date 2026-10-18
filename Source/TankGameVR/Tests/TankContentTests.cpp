@@ -123,13 +123,13 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		{
 			TestTrue(FString::Printf(TEXT("%s key %s is overridden by the tank"), *ActionName, *Mapping.Key.ToString()), TankKeys.Contains(Mapping.Key));
 		}
-		// The view toggle must not steal a button the template uses (menu, grab, teleport...).
+		// The toggle must not use a button the template already uses.
 		TestFalse(FString::Printf(TEXT("view toggle key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), ToggleViewKeys.Contains(Mapping.Key));
 	}
 	TestTrue(TEXT("keyboard drive fallback"), TankKeys.Contains(EKeys::W) && TankKeys.Contains(EKeys::D));
 	TestTrue(TEXT("keyboard aim fallback"), TankKeys.Contains(EKeys::Left) && TankKeys.Contains(EKeys::Right));
 
-	// What each key really produces: a full press run through the mapping's saved modifiers.
+	// Run a full press through each mapping's saved modifiers.
 	const TMap<FString, FVector2D> Expected = {
 		{ TEXT("W"), FVector2D(0, 1) }, { TEXT("S"), FVector2D(0, -1) }, { TEXT("A"), FVector2D(-1, 0) }, { TEXT("D"), FVector2D(1, 0) },
 		{ TEXT("Up"), FVector2D(0, 1) }, { TEXT("Down"), FVector2D(0, -1) }, { TEXT("Left"), FVector2D(-1, 0) }, { TEXT("Right"), FVector2D(1, 0) },
@@ -154,7 +154,7 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		}
 		else
 		{
-			// Analog axes: *_X / *X feeds X, *_Y / *Y feeds Y (positive stays positive).
+			// Analog axes: X -> X, Y -> Y
 			Want = (KeyName.EndsWith(TEXT("Y"))) ? FVector2D(0, 1) : FVector2D(1, 0);
 		}
 		TestTrue(FString::Printf(TEXT("%s -> %s (got %s)"), *KeyName, *Want.ToString(), *Result.ToString()), Result.Equals(Want, 1e-4));
@@ -212,7 +212,7 @@ bool FTankContentGrabStickTest::RunTest(const FString& Parameters)
 	ATankVehicle* Tank = SpawnPlayerTank(Test);
 	Test.Tick(0.2f);
 
-	// A motion controller "hand" that rides in the tank (like the seated VR pawn's hands).
+	// A motion controller "hand" riding in the tank.
 	AActor* HandActor = Test.World->SpawnActor<AActor>();
 	UMotionControllerComponent* Hand = NewObject<UMotionControllerComponent>(HandActor, TEXT("MotionControllerLeftGrip"));
 	Hand->SetTrackingMotionSource(FName(TEXT("Left")));
@@ -268,7 +268,7 @@ bool FTankContentBoardingTest::RunTest(const FString& Parameters)
 	Test.Tick(0.1f);
 	TestTrue(TEXT("pawn is placed at the seat"), FVector::Dist2D(Pawn->GetActorLocation(), Seat->GetComponentLocation()) < 1.0);
 
-	// Without a headset the camera starts at the seat floor; calibration lifts it to the design eye height.
+	// No headset: calibration lifts the camera to eye height.
 	Test.Tick(Seat->CalibrationDelay + 0.2f);
 	const UCameraComponent* Camera = Pawn->FindComponentByClass<UCameraComponent>();
 	if (TestNotNull(TEXT("pawn camera"), Camera))
@@ -296,7 +296,7 @@ bool FTankContentOverviewCameraTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	// No possession: the seat boards the pawn directly and the tank falls back to the first player controller.
+	// Possessing BP_XRPawn in this test world crashes, so just board it.
 	Test.Tick(0.1f);
 	Tank->FindComponentByClass<UTankSeatComponent>()->Board(Pawn);
 	Test.Tick(0.2f);

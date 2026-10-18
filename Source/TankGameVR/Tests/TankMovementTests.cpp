@@ -49,7 +49,7 @@ namespace TankMovementTests
 			const FVector Step = (Now - Previous) * FVector(1, 1, 0);
 			if (Step.Size() > 0.05)
 			{
-				// Angle between the actual step and the hull heading (mid-step): must stay tiny (no sideways slide).
+				// No sideways slide.
 				const FVector Heading = FRotator(0.0f, (Yaw + PreviousYaw) * 0.5f, 0.0f).Vector();
 				const float Slip = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FMath::Abs(FVector::DotProduct(Step.GetSafeNormal(), Heading)), 0.0, 1.0)));
 				Result.MaxSlipDegrees = FMath::Max(Result.MaxSlipDegrees, Slip);

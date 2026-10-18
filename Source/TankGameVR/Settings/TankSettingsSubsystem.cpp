@@ -24,7 +24,7 @@ void UTankSettingsSubsystem::LoadSettings()
 	const UTankSettingsSaveGame* Save = UGameplayStatics::DoesSaveGameExist(SlotName, 0)
 		? Cast<UTankSettingsSaveGame>(UGameplayStatics::LoadGameFromSlot(SlotName, 0))
 		: nullptr;
-	// First run (or unreadable file): defaults.
+	// No save yet: defaults.
 	bAimAssistEnabled = Save ? Save->bAimAssistEnabled : true;
 }
 

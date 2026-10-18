@@ -34,8 +34,8 @@ USceneComponent* UCockpitJoystickComponent::FindGrabComponent() const
 
 void UCockpitJoystickComponent::ApplyKnobCollision()
 {
-	// The template grab component forces its parent to the PhysicsActor profile in BeginPlay. A cockpit knob must
-	// stay findable by the hand's grab trace (PhysicsBody object type) without colliding with anything.
+	// BP_GrabComponent sets its parent to PhysicsActor in BeginPlay. The knob has to stay PhysicsBody for the
+	// grab trace but must not collide.
 	bCollisionApplied = true;
 	if (UPrimitiveComponent* Knob = GrabComponent ? Cast<UPrimitiveComponent>(GrabComponent->GetAttachParent()) : nullptr)
 	{
@@ -58,7 +58,7 @@ void UCockpitJoystickComponent::PollGrabComponent()
 		Hand = nullptr;
 		return;
 	}
-	// Read the template grab component's public state through reflection, so the Blueprint stays untouched.
+	// Read the template's grab component via reflection (no Blueprint changes needed).
 	bool bIsHeld = false;
 	if (const FBoolProperty* HeldProperty = FindFProperty<FBoolProperty>(GrabComponent->GetClass(), TEXT("bIsHeld")))
 	{
@@ -117,7 +117,7 @@ void UCockpitJoystickComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		const FVector2D Angles = HandAngles(Hand->GetComponentLocation());
 		if (!bWasHeld)
 		{
-			// Relative to where the hand grabbed: grabbing never makes the stick jump.
+			// Relative to the grab point so the stick doesn't jump.
 			AnglesAtGrab = Angles;
 			ValueAtGrab = Value;
 		}
@@ -143,7 +143,7 @@ void UCockpitJoystickComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 
 void UCockpitJoystickComponent::ApplyVisualTilt()
 {
-	// Positive pitch would tip +Z backwards and positive roll would tip it left, hence the negations.
+	// Signs: +pitch tips back, +roll tips left.
 	const FQuat Tilt = FRotator(-Value.Y * MaxTiltAngle, 0.0f, -Value.X * MaxTiltAngle).Quaternion();
 	SetRelativeRotation(RestRelativeTransform.GetRotation() * Tilt);
 }

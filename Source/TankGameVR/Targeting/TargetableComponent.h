@@ -4,10 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "TargetableComponent.generated.h"
 
-/**
- * Add to any actor that the tank may lock on to (enemy tanks, turrets, ...). The actor's look does not matter.
- * Registers itself with UTargetRegistrySubsystem while playing; destroyed or disabled targets drop out automatically.
- */
+// Add to any actor the tank can lock on to.
 UCLASS(ClassGroup = (Targeting), meta = (BlueprintSpawnableComponent))
 class TANKGAMEVR_API UTargetableComponent : public UActorComponent
 {
@@ -16,21 +13,20 @@ class TANKGAMEVR_API UTargetableComponent : public UActorComponent
 public:
 	UTargetableComponent();
 
-	/** Offset (actor space) of the point the crosshair locks onto, e.g. the turret centre. */
+	/** Point the crosshair locks onto, in actor space. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting")
 	FVector TargetPointOffset = FVector(0.0, 0.0, 120.0);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting")
 	FText DisplayName;
 
-	/** Set false when the target is dead/disabled but the actor still exists (e.g. a burning wreck). */
+	/** e.g. false for a wreck that should stay in the level. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void SetTargetable(bool bInTargetable);
 
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	bool IsTargetable() const { return bTargetable; }
 
-	/** Alive, enabled and in play. */
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	bool IsValidTarget() const;
 

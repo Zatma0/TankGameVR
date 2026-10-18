@@ -19,16 +19,8 @@ class UWidgetComponent;
 struct FInputActionValue;
 
 /**
- * The player's tank. Owns the functional pieces only (hull collision, movement, targeting, seat, the two cockpit
- * sticks, the cockpit display and the aiming reference points). All visible meshes are added in the Blueprint
- * (BP_PlayerTank) and can be swapped for final art freely: no gameplay code refers to them.
- *
- * Input: the physical cockpit sticks (grabbed with VR hands) take priority; while a stick is not held, the
- * matching thumbstick/keyboard action drives it instead (IMC_Tank, added on boarding above the VR template's
- * locomotion so the thumbsticks drive the tank instead of teleporting/snap turning).
- *
- * View: besides the cockpit (the rider's own camera) the tank carries an overview camera on a boom above and behind
- * the hull. ToggleViewAction switches between the two; the overview shows a small status panel on screen.
+ * Player tank. Holds the gameplay components; the meshes live in BP_PlayerTank.
+ * A held cockpit stick wins, otherwise the thumbstick/keyboard drives it. IMC_Tank is added on boarding.
  */
 UCLASS(Blueprintable)
 class TANKGAMEVR_API ATankVehicle : public AActor
@@ -53,19 +45,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> ToggleViewAction;
 
-	/** Must be higher than the VR template's IMC_Default (0) so tank controls win while seated. */
+	/** Above the template's IMC_Default (0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	int32 MappingPriority = 10;
 
-	/** Blend time when switching views on a monitor. With a headset the switch is a cut (blends are uncomfortable). */
+	/** Blend time on a monitor; with a headset the switch is a cut. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|View", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float ViewBlendTime = 0.35f;
 
-	/** On-screen status panel shown while the overview camera is active (none = no panel). */
+	/** Screen panel shown in the overview view. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|View")
 	TSubclassOf<UUserWidget> OverviewHudClass;
 
-	/** Switches between the cockpit view (rider's camera) and the overview camera. */
 	UFUNCTION(BlueprintCallable, Category = "Tank|View")
 	void SetOverviewView(bool bEnable);
 
@@ -96,7 +87,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Tank")
 	UWidgetComponent* GetDisplay() const { return Display; }
 
-	/** Thumbstick/keyboard values (normally set by the input actions; tests may set them directly). */
+	/** Thumbstick/keyboard values (tests set them directly). */
 	UFUNCTION(BlueprintCallable, Category = "Tank|Input")
 	void SetFallbackInputs(FVector2D Drive, FVector2D Aim);
 
@@ -145,8 +136,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
 	TObjectPtr<UWidgetComponent> Display;
 
-	/** Boom of the overview camera. Follows the hull's heading but not its pitch/roll, with a little lag. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
+		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
 	TObjectPtr<USpringArmComponent> OverviewArm;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")

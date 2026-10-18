@@ -11,7 +11,7 @@
 UTankTargetingComponent::UTankTargetingComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// After the hull has moved this frame, so aim and crosshair use the final pose.
+	// After the hull has moved.
 	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 }
 
@@ -124,7 +124,7 @@ void UTankTargetingComponent::SetAimAssistEnabled(bool bEnabled)
 	bAimAssistEnabled = bEnabled;
 	if (!bAimAssistEnabled)
 	{
-		// Manual aiming continues from where the crosshair is now: no jump, no hidden correction.
+		// Continue manual aim from the current crosshair.
 		ClearTarget();
 		LastDecision = TEXT("Aim assist disabled: manual aim");
 	}
@@ -308,7 +308,7 @@ void UTankTargetingComponent::MaintainCurrentTarget(double Time)
 	{
 		return;
 	}
-	// Range/angle/visibility check at 10 Hz; the lock only drops after staying ineligible for a while.
+	// Drop the lock only after it has been invalid for a while.
 	NextEligibilityCheckTime = Time + 0.1;
 	FTargetCandidate Candidate;
 	Candidate.Target = Target;
@@ -339,7 +339,7 @@ void UTankTargetingComponent::HandleSwitchInput(double Time)
 		const int32 Direction = AimInput.X > 0.0 ? 1 : -1;
 		if (!bSwitchHeld || Direction != HeldDirection)
 		{
-			// Edge: a fresh push (or a reversal) switches once.
+			// New push or reversal
 			bSwitchHeld = true;
 			HeldDirection = Direction;
 			NextRepeatTime = Time + TargetSwitchRepeatDelay;
@@ -347,7 +347,7 @@ void UTankTargetingComponent::HandleSwitchInput(double Time)
 		}
 		else if (TargetSwitchRepeatInterval > 0.0f && Time >= NextRepeatTime)
 		{
-			// Held: step again at a controlled rate.
+			// Held: repeat
 			NextRepeatTime = Time + TargetSwitchRepeatInterval;
 			RequestTargetSwitch(Direction);
 		}
@@ -435,11 +435,11 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		}
 		else
 		{
-			// No lock: the stick aims manually until a target can be acquired.
+			// No lock: aim manually.
 			bSwitchHeld = false;
 			UpdateManualAim(DeltaTime);
 
-			// Idle with nothing to lock: drift back to the hull's forward so the next lock starts from the centre.
+			// Idle: drift back to the front.
 			const bool bStickIdle = AimInput.IsNearlyZero(ManualAimDeadZone);
 			IdleSince = bStickIdle ? (IdleSince < 0.0 ? Time : IdleSince) : -1.0;
 			if (AimRecenterDelay > 0.0f && IdleSince >= 0.0 && Time - IdleSince >= AimRecenterDelay)
@@ -467,12 +467,12 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	UpdateAim(DeltaTime);
 	if (CurrentTarget.IsValid())
 	{
-		// Keep manual angles following the lock, so dropping it continues from the current aim.
+		// Keep manual angles in sync with the lock.
 		SyncManualAnglesToAim();
 	}
 	UpdateTurretVisuals();
 
-	// Keep every target's eligibility (incl. line of sight) fresh for the display, at a modest rate.
+	// Refresh eligibility for the display.
 	if (Time >= NextCandidateRefreshTime)
 	{
 		NextCandidateRefreshTime = Time + CandidateRefreshInterval;

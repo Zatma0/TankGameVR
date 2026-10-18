@@ -12,17 +12,8 @@ class UTankSettingsSubsystem;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTankTargetChanged, UTargetableComponent*, OldTarget, UTargetableComponent*, NewTarget);
 
 /**
- * Lock-on aiming for the tank (Dark Souls-style target cycling).
- *
- * Aim Assist ON : one current target. Pushing the aim stick left/right steps to the nearest eligible target on that
- *                 side of the current one (edge-triggered, with repeat interval, cooldown and hysteresis, so holding
- *                 the stick never cycles uncontrollably and noise near the threshold never flips targets).
- *                 Lost/destroyed targets are re-acquired automatically; with no target the stick aims manually
- *                 until a target is acquired.
- * Aim Assist OFF: no locking at all; the stick turns the aim (yaw/pitch) manually.
- *
- * The aim direction (what the crosshair shows) always moves smoothly toward the desired direction.
- * Works with any actor that has a UTargetableComponent; the look of enemies is irrelevant.
+ * Lock-on aiming. Aim Assist on: one target, the aim stick steps left/right to the next one on that side.
+ * Aim Assist off: the stick aims freely. The aim always moves smoothly toward its goal.
  */
 UCLASS(ClassGroup = (Targeting), meta = (BlueprintSpawnableComponent))
 class TANKGAMEVR_API UTankTargetingComponent : public UActorComponent
@@ -32,8 +23,6 @@ class TANKGAMEVR_API UTankTargetingComponent : public UActorComponent
 public:
 	UTankTargetingComponent();
 
-	// --- Tuning --------------------------------------------------------------------------------------
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Selection", meta = (ShowOnlyInnerProperties))
 	FTargetSelectionTuning Selection;
 
@@ -41,7 +30,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.1", ClampMax = "0.95"))
 	float TargetSwitchDeadZone = 0.55f;
 
-	/** The stick must come back below this before the next push counts as a new request (hysteresis). */
+	/** Stick must return below this before the next push counts. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.0", ClampMax = "0.9"))
 	float TargetSwitchReleaseThreshold = 0.35f;
 
@@ -49,27 +38,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float TargetSwitchCooldown = 0.2f;
 
-	/** Holding the stick to one side: delay before it starts stepping again. */
+	/** Delay before a held stick starts repeating. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float TargetSwitchRepeatDelay = 0.6f;
 
-	/** Holding the stick: step interval after the first repeat. 0 = never repeat (one step per push). */
+	/** Repeat interval while held. 0 = no repeat. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float TargetSwitchRepeatInterval = 0.45f;
 
-	/** Seconds the current target may be ineligible (angle/range/visibility) before the lock drops. Stops flicker at limits. */
+	/** How long the target may be out of range/view before the lock drops. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Switching", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float TargetSelectionSmoothing = 0.5f;
 
-	/** 0..1: how strongly the aim is pulled onto the locked target (1 = exactly on target). */
+	/** How strongly the aim is pulled onto the target (1 = exactly on it). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float TargetLockStrength = 1.0f;
 
-	/** Exponential rate (1/s) at which the aim/crosshair moves toward its goal. Higher = snappier. */
+	/** How fast the crosshair moves toward its goal. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.5", ClampMax = "60.0"))
 	float CrosshairTransitionSpeed = 10.0f;
 
-	/** Manual aiming speed at full stick (deg/s). */
+	/** deg/s at full stick. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "1.0"))
 	float ManualAimSpeed = 60.0f;
 
@@ -79,42 +68,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim")
 	FVector2D ManualPitchRange = FVector2D(-10.0, 25.0);
 
-	/** Stick dead zone for manual aiming. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", ClampMax = "0.9"))
 	float ManualAimDeadZone = 0.15f;
 
-	/** With Aim Assist on and no target, lock the best target in view automatically (e.g. when a new wave arrives). */
+	/** Lock the best target automatically when there is none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire")
 	bool bAutoAcquire = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.05", Units = "Seconds"))
 	float AutoAcquireInterval = 0.25f;
 
-	/** How often (s) every registered target is re-scored (eligibility incl. line of sight) for the display and lock-on. */
+	/** How often all targets are re-checked. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.02", Units = "Seconds"))
 	float CandidateRefreshInterval = 0.1f;
 
-	/** Aim Assist on, no target, stick idle: after this delay the aim drifts back to the hull's forward. 0 = never. */
+	/** No target and idle stick: aim returns to the front after this delay. 0 = never. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float AimRecenterDelay = 1.5f;
 
-	/** Recentering speed (deg/s). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "1.0"))
 	float AimRecenterSpeed = 30.0f;
 
-	/** Sideways spread of the extra visibility rays (cm). */
+	/** Side offset of the extra line-of-sight rays. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.0", Units = "Centimeters"))
 	float VisibilitySampleSpread = 80.0f;
 
-	/** Owner components (by name) used for aiming. Missing ones fall back to the actor root. */
+	/** Component names on the owner. Missing ones fall back to the root. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Setup")
 	FName AimOriginComponentName = TEXT("AimOrigin");
 
-	/** Frame the cockpit display looks through (rotates with the hull, not with the turret). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Setup")
 	FName SightComponentName = TEXT("SightFrame");
 
-	/** Optional visual turret (yaw follows the aim) and barrel (pitch follows the aim). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Setup")
 	FName TurretComponentName = TEXT("TurretPivot");
 
@@ -127,20 +112,17 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Targeting")
 	FOnTankTargetChanged OnTargetChanged;
 
-	// --- API -----------------------------------------------------------------------------------------
-
-	/** Aim stick: X = left/right, Y = up/down, each in [-1, 1]. */
+	/** X = left/right, Y = up/down. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void SetAimInput(FVector2D Input);
 
-	/** Steps to the next target on a side (Direction > 0 = right). Returns true if the target changed. */
+	/** Direction > 0 = right. Returns true if the target changed. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	bool RequestTargetSwitch(int32 Direction);
 
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void ClearTarget();
 
-	/** Normally driven by the Aim Assist setting; exposed for tests and special cases. */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void SetAimAssistEnabled(bool bEnabled);
 
@@ -150,7 +132,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	UTargetableComponent* GetCurrentTarget() const { return CurrentTarget.Get(); }
 
-	/** Direction the crosshair currently points at (smoothed). */
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	FVector GetAimDirection() const { return AimRotation.GetForwardVector(); }
 
@@ -166,11 +147,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	FString GetLastDecision() const { return LastDecision; }
 
-	/** Eligibility (range, angle, line of sight) from the latest candidate refresh. */
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	bool IsTargetEligible(const UTargetableComponent* Target) const;
 
-	/** Evaluates all registered targets against the current reference direction (for UI and debugging). */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void RefreshCandidates();
 

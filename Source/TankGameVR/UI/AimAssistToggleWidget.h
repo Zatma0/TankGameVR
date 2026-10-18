@@ -9,10 +9,7 @@
 class UButton;
 class UTextBlock;
 
-/**
- * "Aim Assist: On / Off" entry for the existing in-game menu. Drop it into any menu layout; it reads and writes
- * the persisted setting and updates its own label (works with the VR template's widget interaction laser).
- */
+// "Aim Assist: On/Off" button for the in-game menu.
 UCLASS()
 class TANKGAMEVR_API UAimAssistToggleWidget : public UUserWidget
 {
@@ -22,7 +19,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim Assist", meta = (ClampMin = "8", ClampMax = "96"))
 	int32 FontSize = 24;
 
-	/** Match the surrounding menu: when set, these replace the default button style and label font. */
+	/** Use the style below (to match the menu) instead of the default. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Aim Assist|Style")
 	bool bUseCustomStyle = false;
 

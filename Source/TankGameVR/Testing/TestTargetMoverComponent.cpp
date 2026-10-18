@@ -10,7 +10,7 @@ void UTestTargetMoverComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	StartLocation = GetOwner()->GetActorLocation();
-	// Different phase per actor so a wave does not move in lockstep.
+	// Random phase so they don't all move together.
 	Phase = FMath::Frac(GetOwner()->GetUniqueID() * 0.618f) * UE_TWO_PI;
 }
 

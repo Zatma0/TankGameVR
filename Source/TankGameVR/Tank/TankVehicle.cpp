@@ -24,7 +24,7 @@ ATankVehicle::ATankVehicle()
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.TickGroup = TG_PrePhysics;
 
-	// Hull collision (placeholder size of a medium tank's lower hull). The root sits 90 cm above the ground.
+	// Root sits 90 cm above the ground.
 	HullCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("HullCollision"));
 	HullCollision->SetBoxExtent(FVector(300.0, 160.0, 50.0));
 	HullCollision->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
@@ -46,12 +46,12 @@ ATankVehicle::ATankVehicle()
 	AimOrigin->SetupAttachment(TurretPivot);
 	AimOrigin->SetRelativeLocation(FVector(110.0, 0.0, 25.0));
 
-	// Hull-fixed frame the cockpit display looks through (does not rotate with the turret).
+	// What the cockpit display looks through (fixed to the hull, not the turret).
 	SightFrame = CreateDefaultSubobject<USceneComponent>(TEXT("SightFrame"));
 	SightFrame->SetupAttachment(HullCollision);
 	SightFrame->SetRelativeLocation(FVector(50.0, 0.0, 105.0));
 
-	// Cockpit: driver position front-left, open hatch. CockpitRoot is the seat floor (rider's tracking origin).
+	// Driver position front-left. CockpitRoot = seat floor.
 	CockpitRoot = CreateDefaultSubobject<USceneComponent>(TEXT("CockpitRoot"));
 	CockpitRoot->SetupAttachment(HullCollision);
 	CockpitRoot->SetRelativeLocation(FVector(150.0, -70.0, 10.0));
@@ -67,7 +67,7 @@ ATankVehicle::ATankVehicle()
 	AimStick->SetupAttachment(CockpitRoot);
 	AimStick->SetRelativeLocation(FVector(38.0, 26.0, 68.0));
 
-	// 1024 x 768 widget scaled to a ~36 x 27 cm screen, facing the seat, tilted back for a seated view.
+	// ~36 x 27 cm screen facing the seat.
 	Display = CreateDefaultSubobject<UWidgetComponent>(TEXT("Display"));
 	Display->SetupAttachment(CockpitRoot);
 	Display->SetRelativeLocation(FVector(66.0, 0.0, 100.0));
@@ -80,7 +80,7 @@ ATankVehicle::ATankVehicle()
 	Display->SetTwoSided(false);
 	Display->SetTickWhenOffscreen(true);
 
-	// Overview camera: 15 m behind and above the hull, looking down at it. Only used while the tank is the view target.
+	// Overview camera behind and above the hull.
 	OverviewArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("OverviewArm"));
 	OverviewArm->SetupAttachment(HullCollision);
 	OverviewArm->SetRelativeLocation(FVector(0.0, 0.0, 150.0));
@@ -105,7 +105,7 @@ void ATankVehicle::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Order within a frame: sticks -> this actor (merges inputs) -> movement -> targeting -> display.
+	// Tick order: sticks -> tank -> movement -> targeting
 	AddTickPrerequisiteComponent(DriveStick);
 	AddTickPrerequisiteComponent(AimStick);
 	TankMovement->AddTickPrerequisiteActor(this);
@@ -263,7 +263,7 @@ void ATankVehicle::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	// A held cockpit stick wins; otherwise the thumbstick drives the stick (and its visual).
+	// Held stick wins over the thumbstick.
 	DriveStick->SetExternalValue(FallbackDrive);
 	AimStick->SetExternalValue(FallbackAim);
 	const FVector2D Drive = DriveStick->IsHeld() ? DriveStick->GetValue() : FallbackDrive;

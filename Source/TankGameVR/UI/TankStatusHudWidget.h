@@ -7,11 +7,7 @@
 class ATankVehicle;
 class UTextBlock;
 
-/**
- * Small on-screen status panel for the overview camera: speed, turn rate, Aim Assist, current target and how many
- * targets are around. Builds a placeholder layout itself; a Blueprint subclass may provide its own text block named
- * StatusText instead.
- */
+// Status panel for the overview camera (speed, Aim Assist, target).
 UCLASS()
 class TANKGAMEVR_API UTankStatusHudWidget : public UUserWidget
 {
@@ -27,11 +23,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Status")
 	void SetTank(ATankVehicle* InTank);
 
-	/** Text shown after the last update. */
 	UFUNCTION(BlueprintPure, Category = "Status")
 	FString GetStatusString() const { return LastStatus; }
 
-	/** Runs one update immediately (normally done every tick). */
 	UFUNCTION(BlueprintCallable, Category = "Status")
 	void UpdateStatus();
 
