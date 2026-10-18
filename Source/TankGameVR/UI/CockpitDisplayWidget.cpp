@@ -153,7 +153,6 @@ void UCockpitDisplayWidget::UpdateDisplay()
 		Registry->GetValidTargets(Targets);
 	}
 	const FVector Origin = Targeting_->GetAimOrigin();
-	const FVector SightForward = Sight.GetRotation().GetForwardVector();
 	bool bCurrentOnScreen = false;
 	int32 Used = 0;
 	for (UTargetableComponent* Target : Targets)
@@ -166,11 +165,6 @@ void UCockpitDisplayWidget::UpdateDisplay()
 		bool bOnScreen = false;
 		UTankSightMath::ProjectToSight(Sight, SightFieldOfView, Aspect, Target->GetTargetLocation(), UV, bOnScreen);
 
-		FTargetCandidate Candidate;
-		Candidate.Target = Target;
-		Candidate.Location = Target->GetTargetLocation();
-		UTargetSelectionMath::EvaluateCandidate(Candidate, Origin, SightForward, SightForward, Targeting_->Selection);
-
 		const bool bSelected = Target == Current;
 		bCurrentOnScreen |= bSelected && bOnScreen;
 		FLinearColor Color = InactiveColor;
@@ -178,7 +172,7 @@ void UCockpitDisplayWidget::UpdateDisplay()
 		{
 			Color = bOnScreen ? LockedColor : LockedColor * 0.6f;
 		}
-		else if (bAssist && bOnScreen && Candidate.IsEligible())
+		else if (bAssist && bOnScreen && Targeting_->IsTargetEligible(Target))
 		{
 			Color = SelectableColor;
 		}

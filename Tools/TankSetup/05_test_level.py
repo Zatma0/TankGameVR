@@ -62,14 +62,17 @@ sun.light_component.set_intensity(7.0)
 sun.light_component.set_editor_property("atmosphere_sun_light", True)
 sky = place(unreal.SkyLight, "SkyLight", "Environment", (0, 0, 800))
 sky.light_component.set_mobility(unreal.ComponentMobility.MOVABLE)
-sky.light_component.set_editor_property("real_time_capture", True)
-place(unreal.SkyAtmosphere, "SkyAtmosphere", "Environment", (0, 0, 0))
+sky.light_component.set_editor_property("real_time_capture", False)
+sky.light_component.set_editor_property("intensity", 1.5)
+sky_sphere = place(unreal.load_asset("/Engine/EngineSky/BP_Sky_Sphere").generated_class(), "SkySphere", "Environment", (0, 0, 0))
+sky_sphere.set_editor_property("Directional light actor", sun)
+sky_sphere.set_editor_property("Refresh material", True)
 place(unreal.ExponentialHeightFog, "HeightFog", "Environment", (0, 0, -100))
 
 # Player: the VR pawn spawns at the start and boards the tank's seat automatically.
 place(unreal.PlayerStart, "VR_PlayerStart", "Player", (0, 0, 120))
 tank = place(bp_class("/Game/TankGame/Blueprints/Tank/BP_PlayerTank"), "PlayerTank", "Player", (0, 0, 90))
-spectator = place(bp_class("/Game/VRSpectator/VRSpectator"), "VR_Spectator", "Player", (-900, -500, 450), yaw=25.0, pitch=-15.0)
+spectator = place(bp_class("/Game/VRSpectator/VRSpectator"), "VR_Spectator", "Player", (-1500, -900, 650), yaw=28.0, pitch=-15.0)
 
 # Enemies: test waves 25-45 m ahead.
 place(bp_class("/Game/TankGame/Blueprints/Testing/BP_TankTestWaveSpawner"), "TestWaveSpawner", "Enemies", (0, 0, 0))
@@ -81,6 +84,7 @@ sign.text_render.set_text("TANK TEST\nLeft stick / left cockpit stick: drive (pu
 sign.text_render.set_world_size(22.0)
 sign.text_render.set_horizontal_alignment(unreal.HorizTextAligment.EHTA_CENTER)
 
+sky.light_component.recapture_sky()
 les.save_current_level()
 counts = {}
 for actor in eas.get_all_level_actors():

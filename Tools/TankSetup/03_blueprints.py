@@ -131,6 +131,15 @@ def build_player_tank():
     label(bp, "DriveLabel", "CockpitRoot", "DRIVE", (40, -26, 104))
     label(bp, "AimLabel", "CockpitRoot", "AIM", (40, 26, 104))
 
+    # Small fill light so the cockpit is readable when the hull shadows it (no shadows: cheap for VR).
+    light = component(bp, "CockpitLight", unreal.PointLightComponent, "CockpitRoot")
+    light.set_editor_property("relative_location", unreal.Vector(10, -15, 150))
+    light.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+    light.set_editor_property("intensity", 25.0)
+    light.set_editor_property("attenuation_radius", 220.0)
+    light.set_editor_property("cast_shadows", False)
+    light.set_editor_property("light_color", unreal.Color(255, 236, 214, 255))
+
     compile_save(bp)
     cdo = unreal.get_default_object(bp.generated_class())
     cdo.set_editor_property("tank_mapping_context", unreal.load_asset("/Game/TankGame/Input/IMC_Tank"))

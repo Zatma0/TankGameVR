@@ -229,6 +229,34 @@ bool FTankTargetLifecycleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankOcclusionTest, "Tank.Targeting.LineOfSightAndRecenter", TankTestFlags)
+bool FTankOcclusionTest::RunTest(const FString& Parameters)
+{
+	// A target hidden behind a wall is neither locked nor shown as selectable; it becomes lockable once visible.
+	FTargetScene Scene({ 0 });
+	AActor* Wall = Scene.Test.SpawnBlock(FVector(1500, 0, 200), FVector(0.5, 8, 4));
+	Scene.Test.Tick(1.0f);
+	UTargetableComponent* Hidden = Scene.TargetsByBearing[0]->FindComponentByClass<UTargetableComponent>();
+	TestNull(TEXT("occluded target is not locked"), Scene.Targeting->GetCurrentTarget());
+	TestFalse(TEXT("occluded target is not eligible (display shows it as inactive)"), Scene.Targeting->IsTargetEligible(Hidden));
+
+	Wall->Destroy();
+	Scene.Test.Tick(0.5f);
+	TestTrue(TEXT("visible again -> locked"), Scene.Targeting->GetCurrentTarget() == Hidden);
+	TestTrue(TEXT("and eligible"), Scene.Targeting->IsTargetEligible(Hidden));
+
+	// Lock far to the right, then lose it: the aim drifts back to the hull forward.
+	FTargetScene Right({ 50 });
+	Right.Test.Tick(1.5f);
+	TestNotNull(TEXT("right target locked"), Right.Targeting->GetCurrentTarget());
+	const float LockedYaw = Right.Targeting->GetAimDirection().Rotation().Yaw;
+	Right.TargetsByBearing[50]->Destroy();
+	Right.Test.Tick(5.0f);
+	const float FinalYaw = Right.Targeting->GetAimDirection().Rotation().Yaw;
+	TestTrue(FString::Printf(TEXT("aim recentred after losing the lock (%.1f -> %.1f deg)"), LockedYaw, FinalYaw), LockedYaw > 40.0f && FMath::Abs(FinalYaw) < 3.0f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankAimAssistToggleTest, "Tank.Targeting.AimAssistSetting", TankTestFlags)
 bool FTankAimAssistToggleTest::RunTest(const FString& Parameters)
 {

@@ -242,6 +242,12 @@ void UTankTargetingComponent::RefreshCandidates()
 	LastCandidates = MoveTemp(Candidates);
 }
 
+bool UTankTargetingComponent::IsTargetEligible(const UTargetableComponent* Target) const
+{
+	const FTargetCandidate* Candidate = LastCandidates.FindByPredicate([Target](const FTargetCandidate& C) { return C.Target == Target; });
+	return Candidate && Candidate->IsEligible();
+}
+
 bool UTankTargetingComponent::TryAcquire(const FVector& ReferenceDirection, const FString& Reason)
 {
 	TArray<FTargetCandidate> Candidates;
@@ -432,6 +438,16 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			// No lock: the stick aims manually until a target can be acquired.
 			bSwitchHeld = false;
 			UpdateManualAim(DeltaTime);
+
+			// Idle with nothing to lock: drift back to the hull's forward so the next lock starts from the centre.
+			const bool bStickIdle = AimInput.IsNearlyZero(ManualAimDeadZone);
+			IdleSince = bStickIdle ? (IdleSince < 0.0 ? Time : IdleSince) : -1.0;
+			if (AimRecenterDelay > 0.0f && IdleSince >= 0.0 && Time - IdleSince >= AimRecenterDelay)
+			{
+				ManualYaw = FMath::FixedTurn(ManualYaw, 0.0f, AimRecenterSpeed * DeltaTime);
+				ManualPitch = FMath::FixedTurn(ManualPitch, 0.0f, AimRecenterSpeed * DeltaTime);
+			}
+
 			if (bAutoAcquire && Time >= NextAutoAcquireTime)
 			{
 				NextAutoAcquireTime = Time + AutoAcquireInterval;
@@ -456,10 +472,15 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	}
 	UpdateTurretVisuals();
 
+	// Keep every target's eligibility (incl. line of sight) fresh for the display, at a modest rate.
+	if (Time >= NextCandidateRefreshTime)
+	{
+		NextCandidateRefreshTime = Time + CandidateRefreshInterval;
+		RefreshCandidates();
+	}
+
 	if (TankDebug::IsTargetingDebugEnabled(bDebugDraw))
 	{
-		// Debug only: re-score every target each frame so the overlay shows live values.
-		RefreshCandidates();
 		DrawDebug();
 	}
 }

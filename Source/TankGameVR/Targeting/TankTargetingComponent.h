@@ -90,6 +90,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.05", Units = "Seconds"))
 	float AutoAcquireInterval = 0.25f;
 
+	/** How often (s) every registered target is re-scored (eligibility incl. line of sight) for the display and lock-on. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.02", Units = "Seconds"))
+	float CandidateRefreshInterval = 0.1f;
+
+	/** Aim Assist on, no target, stick idle: after this delay the aim drifts back to the hull's forward. 0 = never. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", Units = "Seconds"))
+	float AimRecenterDelay = 1.5f;
+
+	/** Recentering speed (deg/s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "1.0"))
+	float AimRecenterSpeed = 30.0f;
+
 	/** Sideways spread of the extra visibility rays (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.0", Units = "Centimeters"))
 	float VisibilitySampleSpread = 80.0f;
@@ -154,6 +166,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	FString GetLastDecision() const { return LastDecision; }
 
+	/** Eligibility (range, angle, line of sight) from the latest candidate refresh. */
+	UFUNCTION(BlueprintPure, Category = "Targeting")
+	bool IsTargetEligible(const UTargetableComponent* Target) const;
+
 	/** Evaluates all registered targets against the current reference direction (for UI and debugging). */
 	UFUNCTION(BlueprintCallable, Category = "Targeting")
 	void RefreshCandidates();
@@ -215,5 +231,7 @@ private:
 	double NextAutoAcquireTime = 0.0;
 	double NextEligibilityCheckTime = 0.0;
 	double IneligibleSince = -1.0;
+	double NextCandidateRefreshTime = 0.0;
+	double IdleSince = -1.0;
 	FString LastDecision;
 };
