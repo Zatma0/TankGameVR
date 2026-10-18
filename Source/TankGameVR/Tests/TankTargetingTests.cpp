@@ -83,7 +83,7 @@ namespace TankTargetingTests
 
 using namespace TankTargetingTests;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankProjectionTest, "Tank.Targeting.SightProjection", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankProjectionTest, "Tank.Targeting.SightProjection", TankTestFlags)
 bool FTankProjectionTest::RunTest(const FString& Parameters)
 {
 	const FTransform Sight(FRotator::ZeroRotator, FVector(0, 0, 100));
@@ -117,7 +117,7 @@ bool FTankProjectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankRegistryTest, "Tank.Targeting.RegistryLifecycle", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankRegistryTest, "Tank.Targeting.RegistryLifecycle", TankTestFlags)
 bool FTankRegistryTest::RunTest(const FString& Parameters)
 {
 	FWorld Test;
@@ -142,7 +142,7 @@ bool FTankRegistryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetCyclingTest, "Tank.Targeting.LeftRightCycling", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetCyclingTest, "Tank.Targeting.LeftRightCycling", TankTestFlags)
 bool FTankTargetCyclingTest::RunTest(const FString& Parameters)
 {
 	FTargetScene Scene({ -30, -10, 15, 40 });
@@ -163,7 +163,7 @@ bool FTankTargetCyclingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetStabilityTest, "Tank.Targeting.NoJitterAndControlledRepeat", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetStabilityTest, "Tank.Targeting.NoJitterAndControlledRepeat", TankTestFlags)
 bool FTankTargetStabilityTest::RunTest(const FString& Parameters)
 {
 	FTargetScene Scene({ -30, -10, 15, 40 });
@@ -197,7 +197,7 @@ bool FTankTargetStabilityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetLifecycleTest, "Tank.Targeting.DestroyedTargetsAndWaves", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTargetLifecycleTest, "Tank.Targeting.DestroyedTargetsAndWaves", TankTestFlags)
 bool FTankTargetLifecycleTest::RunTest(const FString& Parameters)
 {
 	FTargetScene Scene({ -10, 15 });
@@ -229,7 +229,7 @@ bool FTankTargetLifecycleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankAimAssistToggleTest, "Tank.Targeting.AimAssistSetting", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankAimAssistToggleTest, "Tank.Targeting.AimAssistSetting", TankTestFlags)
 bool FTankAimAssistToggleTest::RunTest(const FString& Parameters)
 {
 	FTargetScene Scene({ -10, 15 });
@@ -272,7 +272,7 @@ bool FTankAimAssistToggleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankCrosshairTest, "Tank.Targeting.CrosshairFollowsTarget", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankCrosshairTest, "Tank.Targeting.CrosshairFollowsTarget", TankTestFlags)
 bool FTankCrosshairTest::RunTest(const FString& Parameters)
 {
 	FTargetScene Scene({ -10, 15 });
@@ -322,7 +322,7 @@ bool FTankCrosshairTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankJoystickTest, "Tank.Cockpit.JoystickFromHand", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankJoystickTest, "Tank.Cockpit.JoystickFromHand", TankTestFlags)
 bool FTankJoystickTest::RunTest(const FString& Parameters)
 {
 	FWorld Test;

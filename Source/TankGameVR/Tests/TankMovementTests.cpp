@@ -66,7 +66,7 @@ namespace TankMovementTests
 
 using namespace TankMovementTests;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankShapeAxisTest, "Tank.Movement.InputShaping", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankShapeAxisTest, "Tank.Movement.InputShaping", TankTestFlags)
 bool FTankShapeAxisTest::RunTest(const FString& Parameters)
 {
 	TestEqual(TEXT("inside dead zone -> 0"), UTankMovementMath::ShapeAxis(0.1f, 0.12f, 1.6f, 1.0f), 0.0f);
@@ -92,7 +92,7 @@ bool FTankShapeAxisTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankSteeringCurveTest, "Tank.Movement.SteeringCurves", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankSteeringCurveTest, "Tank.Movement.SteeringCurves", TankTestFlags)
 bool FTankSteeringCurveTest::RunTest(const FString& Parameters)
 {
 	const FDriveResult SmallRight = Drive(FVector2D(0.35, 0.0), 6.0f);
@@ -123,7 +123,7 @@ bool FTankSteeringCurveTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankStraightAndNeutralTest, "Tank.Movement.ThrottleAndNeutral", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankStraightAndNeutralTest, "Tank.Movement.ThrottleAndNeutral", TankTestFlags)
 bool FTankStraightAndNeutralTest::RunTest(const FString& Parameters)
 {
 	const FDriveResult Forward = Drive(FVector2D(0.0, 1.0), 5.0f);
@@ -154,7 +154,7 @@ bool FTankStraightAndNeutralTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankFrameRateTest, "Tank.Movement.FrameRateIndependence", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankFrameRateTest, "Tank.Movement.FrameRateIndependence", TankTestFlags)
 bool FTankFrameRateTest::RunTest(const FString& Parameters)
 {
 	const FDriveResult At30 = Drive(FVector2D(0.7, 0.6), 5.0f, 1.0f / 30.0f);
@@ -170,7 +170,7 @@ bool FTankFrameRateTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankCollisionTest, "Tank.Movement.BlockedByWall", Flags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankCollisionTest, "Tank.Movement.BlockedByWall", TankTestFlags)
 bool FTankCollisionTest::RunTest(const FString& Parameters)
 {
 	FDriveResult Result = Drive(FVector2D(0.0, 1.0), 6.0f, 1.0f / 90.0f, [](FWorld& Test)

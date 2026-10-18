@@ -24,5 +24,11 @@ public class TankGameVR : ModuleRules
 			"XRBase",
 			"SlateCore"
 		});
+
+		// Editor-only helpers used by the content setup scripts (Testing/TankEditorUtils).
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "UMGEditor" });
+		}
 	}
 }

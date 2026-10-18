@@ -18,6 +18,12 @@ bool UAimAssistToggleWidget::Initialize()
 		ToggleButton->AddChild(Label);
 		WidgetTree->RootWidget = ToggleButton;
 	}
+	if (bUseCustomStyle && ToggleButton && Label)
+	{
+		ToggleButton->SetStyle(ButtonStyle);
+		Label->SetFont(LabelFont);
+		Label->SetColorAndOpacity(LabelColor);
+	}
 	return bResult;
 }
 

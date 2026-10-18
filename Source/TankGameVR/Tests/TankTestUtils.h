@@ -12,7 +12,7 @@
 
 namespace TankTests
 {
-	constexpr EAutomationTestFlags Flags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
+	constexpr EAutomationTestFlags TankTestFlags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 
 	/** Game world with game instance, game mode and a large static floor whose top is at z = 0. */
 	struct FWorld
