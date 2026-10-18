@@ -23,6 +23,8 @@
 #include "GameFramework/PlayerController.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "InputModifiers.h"
+#include "Camera/CameraComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "MotionControllerComponent.h"
 #include "UObject/StructOnScope.h"
@@ -114,6 +116,33 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("keyboard drive fallback"), TankKeys.Contains(EKeys::W) && TankKeys.Contains(EKeys::D));
 	TestTrue(TEXT("keyboard aim fallback"), TankKeys.Contains(EKeys::Left) && TankKeys.Contains(EKeys::Right));
+
+	// What each key really produces: a full press run through the mapping's saved modifiers.
+	const TMap<FString, FVector2D> Expected = {
+		{ TEXT("W"), FVector2D(0, 1) }, { TEXT("S"), FVector2D(0, -1) }, { TEXT("A"), FVector2D(-1, 0) }, { TEXT("D"), FVector2D(1, 0) },
+		{ TEXT("Up"), FVector2D(0, 1) }, { TEXT("Down"), FVector2D(0, -1) }, { TEXT("Left"), FVector2D(-1, 0) }, { TEXT("Right"), FVector2D(1, 0) },
+	};
+	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
+	{
+		FInputActionValue Value(EInputActionValueType::Axis2D, FVector(1.0, 0.0, 0.0));
+		for (UInputModifier* Modifier : Mapping.Modifiers)
+		{
+			Value = Modifier ? Modifier->ModifyRaw(nullptr, Value, 0.0f) : Value;
+		}
+		const FVector2D Result = Value.Get<FVector2D>();
+		const FString KeyName = Mapping.Key.GetFName().ToString();
+		FVector2D Want;
+		if (const FVector2D* Keyboard = Expected.Find(KeyName))
+		{
+			Want = *Keyboard;
+		}
+		else
+		{
+			// Analog axes: *_X / *X feeds X, *_Y / *Y feeds Y (positive stays positive).
+			Want = (KeyName.EndsWith(TEXT("Y"))) ? FVector2D(0, 1) : FVector2D(1, 0);
+		}
+		TestTrue(FString::Printf(TEXT("%s -> %s (got %s)"), *KeyName, *Want.ToString(), *Result.ToString()), Result.Equals(Want, 1e-4));
+	}
 	return true;
 }
 
@@ -220,11 +249,20 @@ bool FTankContentBoardingTest::RunTest(const FString& Parameters)
 	UTankSeatComponent* Seat = Tank->FindComponentByClass<UTankSeatComponent>();
 	TestTrue(TEXT("pawn boards the seat"), Seat->Board(Pawn));
 	Test.Tick(0.1f);
-	TestTrue(TEXT("pawn is placed at the seat"), Pawn->GetActorLocation().Equals(Seat->GetComponentLocation(), 1.0));
+	TestTrue(TEXT("pawn is placed at the seat"), FVector::Dist2D(Pawn->GetActorLocation(), Seat->GetComponentLocation()) < 1.0);
+
+	// Without a headset the camera starts at the seat floor; calibration lifts it to the design eye height.
+	Test.Tick(Seat->CalibrationDelay + 0.2f);
+	const UCameraComponent* Camera = Pawn->FindComponentByClass<UCameraComponent>();
+	if (TestNotNull(TEXT("pawn camera"), Camera))
+	{
+		const double EyeHeight = Camera->GetComponentLocation().Z - Seat->GetComponentLocation().Z;
+		TestTrue(FString::Printf(TEXT("eyes at the design height above the seat (%.1f cm)"), EyeHeight), FMath::IsNearlyEqual(EyeHeight, Seat->DesignEyeHeight, 1.0));
+	}
 
 	Tank->SetFallbackInputs(FVector2D(1.0, 0.5), FVector2D::ZeroVector);
 	Test.Tick(3.0f);
-	TestTrue(TEXT("rider stays in the seat while the tank drives and turns"), Pawn->GetActorLocation().Equals(Seat->GetComponentLocation(), 1.0));
+	TestTrue(TEXT("rider stays in the seat while the tank drives and turns"), FVector::Dist2D(Pawn->GetActorLocation(), Seat->GetComponentLocation()) < 1.0);
 	TestTrue(TEXT("rider's frame turns with the hull (camera itself is never rotated by code)"),
 		FMath::IsNearlyEqual(FRotator::NormalizeAxis(Pawn->GetActorRotation().Yaw - Tank->GetActorRotation().Yaw), 0.0f, 0.5f));
 	return true;

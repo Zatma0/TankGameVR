@@ -37,9 +37,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seat", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float CalibrationDelay = 1.0f;
 
-	/** Largest correction applied by calibration. */
+	/** Largest correction applied by calibration (desktop play without a headset needs the full eye height). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seat", meta = (ClampMin = "0.0", Units = "Centimeters"))
-	float MaxCalibrationOffset = 80.0f;
+	float MaxCalibrationOffset = 150.0f;
 
 	UPROPERTY(BlueprintAssignable, Category = "Seat")
 	FOnTankBoarded OnBoarded;

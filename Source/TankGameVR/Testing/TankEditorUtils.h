@@ -24,6 +24,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Tank|Editor")
 	static bool AddWidgetToWidgetBlueprint(UObject* WidgetBlueprint, FName PanelName, TSubclassOf<UUserWidget> WidgetClass, FName NewWidgetName, bool bBeforeLast);
 
+	/**
+	 * Replaces the modifiers of every mapping of Key in MappingContext: optional Swizzle (YXZ: a 1D key feeds the Y
+	 * component) and optional Negate. Modifiers are created as proper subobjects of the asset so they are saved.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Tank|Editor")
+	static bool SetKeyMappingModifiers(UObject* MappingContext, FName KeyName, bool bSwizzleToY, bool bNegate);
+
 	/** Names and classes of all widgets in a Widget Blueprint's tree (for verification). */
 	UFUNCTION(BlueprintCallable, Category = "Tank|Editor")
 	static TArray<FString> ListWidgetBlueprintWidgets(UObject* WidgetBlueprint);

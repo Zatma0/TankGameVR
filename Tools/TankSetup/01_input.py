@@ -43,24 +43,10 @@ def add(action, key, swizzle=False, negate=False):
 
 
 def apply_modifiers():
-    """map_key returns a copy, so modifiers are written into the stored mapping array afterwards."""
-    container = imc.get_editor_property("default_key_mappings")
-    mappings = container.get_editor_property("mappings")
-    for index in range(len(mappings)):
-        mapping = mappings[index]  # a copy: written back below
-        key = str(mapping.get_editor_property("key").get_editor_property("key_name"))
-        swizzle, negate = MODIFIERS.get((mapping.get_editor_property("action").get_name(), key), (False, False))
-        modifiers = []
-        if swizzle:
-            modifier = unreal.new_object(unreal.InputModifierSwizzleAxis, outer=imc)
-            modifier.set_editor_property("order", unreal.InputAxisSwizzle.YXZ)
-            modifiers.append(modifier)
-        if negate:
-            modifiers.append(unreal.new_object(unreal.InputModifierNegate, outer=imc))
-        mapping.set_editor_property("modifiers", modifiers)
-        mappings[index] = mapping
-    container.set_editor_property("mappings", mappings)
-    imc.set_editor_property("default_key_mappings", container)
+    """Modifiers must be real subobjects of the asset to be saved; a C++ editor helper creates them."""
+    for (action_name, key), (swizzle, negate) in MODIFIERS.items():
+        if swizzle or negate:
+            unreal.TankEditorUtils.set_key_mapping_modifiers(imc, key, swizzle, negate)
 
 
 # VR controllers: X axis -> X, Y axis -> Y (swizzled into the second component).

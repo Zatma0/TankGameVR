@@ -5,6 +5,8 @@
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBoxSlot.h"
+#include "InputMappingContext.h"
+#include "InputModifiers.h"
 
 #if WITH_EDITOR
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -69,6 +71,46 @@ bool UTankEditorUtils::AddWidgetToWidgetBlueprint(UObject* WidgetBlueprint, FNam
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 	FKismetEditorUtilities::CompileBlueprint(Blueprint);
 	return true;
+#else
+	return false;
+#endif
+}
+
+bool UTankEditorUtils::SetKeyMappingModifiers(UObject* MappingContext, FName KeyName, bool bSwizzleToY, bool bNegate)
+{
+#if WITH_EDITOR
+	UInputMappingContext* Context = Cast<UInputMappingContext>(MappingContext);
+	if (!Context)
+	{
+		return false;
+	}
+	Context->Modify();
+	bool bFound = false;
+	for (int32 Index = 0; Index < Context->GetMappings().Num(); ++Index)
+	{
+		FEnhancedActionKeyMapping& Mapping = Context->GetMapping(Index);
+		if (Mapping.Key.GetFName() != KeyName)
+		{
+			continue;
+		}
+		bFound = true;
+		Mapping.Modifiers.Reset();
+		if (bSwizzleToY)
+		{
+			UInputModifierSwizzleAxis* Swizzle = NewObject<UInputModifierSwizzleAxis>(Context, NAME_None, RF_Transactional);
+			Swizzle->Order = EInputAxisSwizzle::YXZ;
+			Mapping.Modifiers.Add(Swizzle);
+		}
+		if (bNegate)
+		{
+			Mapping.Modifiers.Add(NewObject<UInputModifierNegate>(Context, NAME_None, RF_Transactional));
+		}
+	}
+	if (bFound)
+	{
+		Context->MarkPackageDirty();
+	}
+	return bFound;
 #else
 	return false;
 #endif

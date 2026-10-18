@@ -2,6 +2,7 @@
 #include "TankGameVR.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Camera/CameraComponent.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -52,18 +53,18 @@ bool UTankSeatComponent::Board(APawn* Pawn)
 void UTankSeatComponent::CalibrateEyeHeight()
 {
 	APawn* Pawn = Rider.Get();
-	if (!Pawn || !UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled())
+	USceneComponent* PawnRoot = Pawn ? Pawn->GetRootComponent() : nullptr;
+	const UCameraComponent* Camera = Pawn ? Pawn->FindComponentByClass<UCameraComponent>() : nullptr;
+	if (!PawnRoot || !Camera)
 	{
 		return;
 	}
-	FRotator Orientation;
-	FVector Position;
-	UHeadMountedDisplayFunctionLibrary::GetOrientationAndPosition(Orientation, Position);
-	// With a floor-level tracking origin Position.Z is the real head height; move the rider so it matches the cockpit.
-	const float Offset = FMath::Clamp(DesignEyeHeight - static_cast<float>(Position.Z), -MaxCalibrationOffset, MaxCalibrationOffset);
-	if (USceneComponent* PawnRoot = Pawn->GetRootComponent())
-	{
-		PawnRoot->SetRelativeLocation(FVector(0.0, 0.0, Offset));
-	}
-	UE_LOG(LogTankGame, Log, TEXT("Seat calibration: head %.1f cm, design eye %.1f cm, offset %.1f cm"), Position.Z, DesignEyeHeight, Offset);
+	// Measure the actual camera: with a headset it carries the real head height, without one (desktop play) it sits
+	// at the tracking origin. Either way, shift the rider so the eyes end up at DesignEyeHeight above the seat.
+	const float EyeHeight = static_cast<float>(FVector::DotProduct(Camera->GetComponentLocation() - GetComponentLocation(), GetUpVector()));
+	const float CurrentOffset = static_cast<float>(PawnRoot->GetRelativeLocation().Z);
+	const float Offset = FMath::Clamp(CurrentOffset + DesignEyeHeight - EyeHeight, -MaxCalibrationOffset, MaxCalibrationOffset);
+	PawnRoot->SetRelativeLocation(FVector(0.0, 0.0, Offset));
+	UE_LOG(LogTankGame, Log, TEXT("Seat calibration: eye %.1f cm above seat (headset %s), design %.1f cm, rider offset %.1f cm"),
+		EyeHeight, UHeadMountedDisplayFunctionLibrary::IsHeadMountedDisplayEnabled() ? TEXT("on") : TEXT("off"), DesignEyeHeight, Offset);
 }
