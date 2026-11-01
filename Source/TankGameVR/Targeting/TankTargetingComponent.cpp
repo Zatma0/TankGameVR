@@ -362,11 +362,15 @@ void UTankTargetingComponent::HandleSwitchInput(double Time)
 void UTankTargetingComponent::UpdateManualAim(float DeltaTime)
 {
 	auto Shape = [this](double V) { return FMath::Abs(V) <= ManualAimDeadZone ? 0.0 : FMath::Sign(V) * (FMath::Abs(V) - ManualAimDeadZone) / (1.0 - ManualAimDeadZone); };
-	ManualYaw = FMath::Clamp(ManualYaw + Shape(AimInput.X) * ManualAimSpeed * DeltaTime, -ManualYawLimit, ManualYawLimit);
 	ManualPitch = FMath::Clamp(ManualPitch + Shape(AimInput.Y) * ManualAimSpeed * DeltaTime, ManualPitchRange.X, ManualPitchRange.Y);
 	// The stick can't run ahead of the turret: it stops a few degrees in front of the real gun.
 	constexpr float MaxLead = 4.0f;
-	ManualYaw = TurretYaw + FMath::Clamp(FMath::FindDeltaAngleDegrees(TurretYaw, ManualYaw), -MaxLead, MaxLead);
+	const float Lead = FMath::FindDeltaAngleDegrees(TurretYaw, ManualYaw + Shape(AimInput.X) * ManualAimSpeed * DeltaTime);
+	ManualYaw = FRotator::NormalizeAxis(TurretYaw + FMath::Clamp(Lead, -MaxLead, MaxLead));
+	if (ManualYawLimit < 180.0f)
+	{
+		ManualYaw = FMath::Clamp(ManualYaw, -ManualYawLimit, ManualYawLimit);
+	}
 	ManualPitch = GunPitch + FMath::Clamp(ManualPitch - GunPitch, -MaxLead, MaxLead);
 }
 

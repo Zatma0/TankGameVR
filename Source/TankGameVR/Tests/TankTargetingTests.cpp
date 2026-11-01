@@ -217,15 +217,30 @@ bool FTankTargetLifecycleTest::RunTest(const FString& Parameters)
 	Scene.Test.Tick(0.5f);
 	TestTrue(TEXT("new wave enemy is acquired automatically"), Scene.Current() == NewEnemy);
 
-	// Too far / outside the angle never selected.
+	// The one in front is chosen first; the turret turns all the way round, so one behind comes next.
+	// Out of lock range is never locked.
 	FTargetScene Limits({ 0 });
-	Limits.Test.SpawnTarget(FVector(-3000, 0, 200), TEXT("Behind"));
+	AActor* Behind = Limits.Test.SpawnTarget(FVector(-3000, 0, 200), TEXT("Behind"));
 	Limits.Test.SpawnTarget(FVector(30000, 0, 200), TEXT("TooFar"));
 	Limits.Test.Tick(0.5f);
-	TestEqual(TEXT("only the eligible target is chosen"), Limits.CurrentBearing(), 0);
+	TestEqual(TEXT("the target closest to the aim is chosen"), Limits.CurrentBearing(), 0);
 	Limits.TargetsByBearing[0]->Destroy();
 	Limits.Test.Tick(0.5f);
-	TestNull(TEXT("behind/too-far targets are never locked"), Limits.Targeting->GetCurrentTarget());
+	TestTrue(TEXT("target behind the tank is lockable"), Limits.Current() == Behind);
+	Behind->Destroy();
+	Limits.Test.Tick(0.5f);
+	TestNull(TEXT("too-far target is never locked"), Limits.Targeting->GetCurrentTarget());
+
+	// A new enemy right beside the tank: locked, and you can switch to it.
+	FTargetScene Side({ 0 });
+	Side.Test.Tick(0.5f);
+	AActor* Beside = Side.Test.SpawnTarget(FVector(0, 2500, 200), TEXT("Beside"));
+	Side.Test.Tick(0.3f);
+	TestEqual(TEXT("still on the front target"), Side.CurrentBearing(), 0);
+	Side.Push(1.0f);
+	TestTrue(TEXT("switch right reaches the tank beside us"), Side.Current() == Beside);
+	Side.Test.Tick(5.0f);
+	TestTrue(FString::Printf(TEXT("turret swung round onto it (error %.1f)"), Side.Targeting->GetAimError()), Side.Targeting->IsOnTarget());
 	return true;
 }
 

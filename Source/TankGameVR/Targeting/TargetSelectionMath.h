@@ -66,9 +66,9 @@ struct TANKGAMEVR_API FTargetSelectionTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (ClampMin = "100.0", Units = "Centimeters"))
 	float MaximumTargetDistance = 6000.0f;
 
-	/** Half-angle (deg) around the hull's forward. */
+	/** Half-angle (deg) around the hull's forward. 180 = all around (the turret turns 360). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (ClampMin = "1.0", ClampMax = "180.0"))
-	float MaximumTargetAngle = 60.0f;
+	float MaximumTargetAngle = 180.0f;
 
 	/** Fraction of line-of-sight rays that must be clear. 0 = ignore. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (ClampMin = "0.0", ClampMax = "1.0"))

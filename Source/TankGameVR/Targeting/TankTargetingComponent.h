@@ -79,7 +79,7 @@ public:
 	float ManualAimSpeed = 60.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", ClampMax = "180.0"))
-	float ManualYawLimit = 120.0f;
+	float ManualYawLimit = 180.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim")
 	FVector2D ManualPitchRange = FVector2D(-10.0, 25.0);
