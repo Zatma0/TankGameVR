@@ -221,12 +221,13 @@ def build_enemies():
     hull.set_collision_profile_name("BlockAllDynamic")
     mesh(base, "TrackLeft", "__root__", CUBE, mat("MI_Tank_Tracks"), (0, -160, 40), (540, 40, 80))
     mesh(base, "TrackRight", "__root__", CUBE, mat("MI_Tank_Tracks"), (0, 160, 40), (540, 40, 80))
-    # The lock-on point is turret height, so the turret has to stop shells too.
+    # Shells can come in high (long range, uphill), so the turret stops them too.
     turret = mesh(base, "Turret", "__root__", CYLINDER, mat("MI_Enemy_Turret"), (-30, 0, 140), (200, 200, 60))
     turret.set_collision_profile_name("BlockAllDynamic")
     mesh(base, "Barrel", "__root__", CYLINDER, mat("MI_Tank_Barrel"), (170, 0, 145), (14, 14, 300), (90.0, 0.0, 0.0))
     targetable = component(base, "Targetable", unreal.TargetableComponent, "__root__")
-    targetable.set_editor_property("target_point_offset", unreal.Vector(0, 0, 130))
+    # Centre of the silhouette (hull 10..110, turret up to 170), so shots go into the middle, not over the hull.
+    targetable.set_editor_property("target_point_offset", unreal.Vector(0, 0, 85))
     health = component(base, "Health", unreal.TankHealthComponent, "__root__")
     health.set_editor_property("max_health", 50.0)
     compile_save(base)

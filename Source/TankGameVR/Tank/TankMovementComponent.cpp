@@ -91,7 +91,19 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	FHitResult Hit;
 	Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
-	bBlockedLastFrame = Hit.bBlockingHit && !Delta.IsNearlyZero();
+	if (Hit.bStartPenetrating)
+	{
+		// Something ended up inside the hull (e.g. an enemy teleported into us): every sweep would be blocked and the
+		// tank would freeze. Step out sideways along the push-out normal, then try the move again.
+		FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
+		PushOut.Z = 0.0;
+		if (!PushOut.IsNearlyZero())
+		{
+			Root->MoveComponent(PushOut, CurrentRotation, false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+		}
+		Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
+	}
+	bBlockedLastFrame = Hit.bBlockingHit && !Hit.bStartPenetrating && !Delta.IsNearlyZero();
 	if (bBlockedLastFrame)
 	{
 		// Hit something: stop, don't slide along it.

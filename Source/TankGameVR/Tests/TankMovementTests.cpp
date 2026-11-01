@@ -184,4 +184,30 @@ bool FTankCollisionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankOverlapEscapeTest, "Tank.Movement.NotStuckWhenSomethingMovesIntoUs", TankTestFlags)
+bool FTankOverlapEscapeTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
+	Test.Tick(0.1f);
+
+	// An enemy "teleports" 10 cm into our left side (the test mover moves enemies without sweeping).
+	AStaticMeshActor* Intruder = Test.SpawnBlock(FVector(0, -200, 100), FVector(2, 1, 2));
+	Test.Tick(0.05f);
+	const FVector Start = Tank->GetActorLocation();
+	Tank->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+	Test.Tick(2.0f);
+	const FVector End = Tank->GetActorLocation();
+	TestTrue(FString::Printf(TEXT("tank keeps driving (moved %.0f cm forward)"), End.X - Start.X), End.X - Start.X > 100.0);
+	TestTrue(FString::Printf(TEXT("pushed out to the side, not through (y %.0f)"), End.Y), End.Y > Start.Y);
+
+	// Turning works too.
+	const float Yaw = Tank->GetActorRotation().Yaw;
+	Tank->SetFallbackInputs(FVector2D(1.0, 0.6), FVector2D::ZeroVector);
+	Test.Tick(1.5f);
+	TestTrue(TEXT("tank can turn"), FMath::Abs(FRotator::NormalizeAxis(Tank->GetActorRotation().Yaw - Yaw)) > 3.0f);
+	Intruder->Destroy();
+	return true;
+}
+
 #endif

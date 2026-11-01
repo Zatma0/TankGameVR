@@ -339,6 +339,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankContentEnemyHitTest, "Tank.Content.CannonK
 bool FTankContentEnemyHitTest::RunTest(const FString& Parameters)
 {
 	FWorld Test;
+	// Don't depend on the player's saved Aim Assist choice.
+	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
+	{
+		Settings->SetSaveSlotForTesting(TestSlot);
+		Settings->SetAimAssistEnabled(true);
+	}
+	ON_SCOPE_EXIT { UGameplayStatics::DeleteGameInSlot(TestSlot, 0); };
 	ATankVehicle* Tank = SpawnPlayerTank(Test);
 	// 30 degrees to the side, so the turret has to turn to hit it.
 	AActor* Enemy = Test.World->SpawnActor<AActor>(LoadBlueprintClass(TEXT("/Game/TankGame/Blueprints/Enemies/BP_EnemyTank_Placeholder")), FTransform(FVector(2600, 1500, 0)));
