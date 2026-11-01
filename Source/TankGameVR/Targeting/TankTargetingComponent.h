@@ -54,9 +54,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float TargetLockStrength = 1.0f;
 
-	/** How fast the crosshair moves toward its goal. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "0.5", ClampMax = "60.0"))
-	float CrosshairTransitionSpeed = 10.0f;
+	/** Turret turning speed. Real tanks: about 25 (T-72) to 40 (Abrams, Leopard 2) deg/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Turret", meta = (ClampMin = "1.0", Units = "DegreesPerSecond"))
+	float TurretTraverseSpeed = 30.0f;
+
+	/** How fast the turret motor spins up and brakes (deg/s^2). Lower = heavier. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Turret", meta = (ClampMin = "1.0"))
+	float TurretTraverseAcceleration = 60.0f;
+
+	/** Gun elevation speed. Real tanks: about 4-8 deg/s. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Turret", meta = (ClampMin = "0.5", Units = "DegreesPerSecond"))
+	float GunElevationSpeed = 8.0f;
+
+	/** deg/s^2 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Turret", meta = (ClampMin = "1.0"))
+	float GunElevationAcceleration = 30.0f;
+
+	/** Below this error the gun counts as laid on the target. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Turret", meta = (ClampMin = "0.1", Units = "Degrees"))
+	float OnTargetTolerance = 1.0f;
 
 	/** deg/s at full stick. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Aim", meta = (ClampMin = "1.0"))
@@ -138,6 +154,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	FVector GetAimOrigin() const;
 
+	/** Angle between where the gun points and where it should point. */
+	UFUNCTION(BlueprintPure, Category = "Targeting|Turret")
+	float GetAimError() const { return AimError; }
+
+	/** Locked and the gun has caught up with the target. */
+	UFUNCTION(BlueprintPure, Category = "Targeting|Turret")
+	bool IsOnTarget() const { return CurrentTarget.IsValid() && AimError <= OnTargetTolerance; }
+
+	/** deg/s, + = right */
+	UFUNCTION(BlueprintPure, Category = "Targeting|Turret")
+	float GetTurretSpeed() const { return TurretYawSpeed; }
+
 	UFUNCTION(BlueprintPure, Category = "Targeting")
 	FTransform GetSightTransform() const;
 
@@ -202,6 +230,12 @@ private:
 	FQuat AimRotation = FQuat::Identity;
 	float ManualYaw = 0.0f;
 	float ManualPitch = 0.0f;
+	// Where the turret/gun really points, relative to the hull.
+	float TurretYaw = 0.0f;
+	float GunPitch = 0.0f;
+	float TurretYawSpeed = 0.0f;
+	float GunPitchSpeed = 0.0f;
+	float AimError = 0.0f;
 	bool bAimAssistEnabled = true;
 	bool bSwitchHeld = false;
 	int32 HeldDirection = 0;

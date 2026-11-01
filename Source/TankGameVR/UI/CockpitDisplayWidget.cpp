@@ -171,7 +171,9 @@ void UCockpitDisplayWidget::UpdateDisplay()
 	bool bCrosshairOnScreen = false;
 	UTankSightMath::ProjectToSight(Sight, SightFieldOfView, Aspect, Targeting_->GetAimOrigin() + Targeting_->GetAimDirection() * 100000.0, CrosshairUV, bCrosshairOnScreen);
 	PlaceCentered(Crosshair, CrosshairUV, CrosshairSize);
-	SetRingColor(Crosshair, Current ? LockedColor : (bAssist ? IdleColor : ManualColor));
+	// Yellow while the turret is still swinging onto the target, red once the gun is laid.
+	const FLinearColor LockColor = Targeting_->IsOnTarget() ? LockedColor : SelectableColor;
+	SetRingColor(Crosshair, Current ? LockColor : (bAssist ? IdleColor : ManualColor));
 
 	TArray<UTargetableComponent*> Targets;
 	if (UTargetRegistrySubsystem* Registry = UTargetRegistrySubsystem::Get(Targeting_))
@@ -217,8 +219,8 @@ void UCockpitDisplayWidget::UpdateDisplay()
 	if (Current)
 	{
 		const float Meters = static_cast<float>(FVector::Dist(Origin, Current->GetTargetLocation()) / 100.0);
-		LastTargetLine = FString::Printf(TEXT("TARGET: %s  %.0f m%s"), *Current->GetTargetDisplayName().ToString(), Meters,
-			bCurrentOnScreen ? TEXT("") : TEXT("  (OFF SCREEN)"));
+		LastTargetLine = FString::Printf(TEXT("TARGET: %s  %.0f m%s%s"), *Current->GetTargetDisplayName().ToString(), Meters,
+			bCurrentOnScreen ? TEXT("") : TEXT("  (OFF SCREEN)"), Targeting_->IsOnTarget() ? TEXT("") : TEXT("  LAYING GUN..."));
 	}
 	else if (!bAssist)
 	{

@@ -57,8 +57,13 @@ Code: `Source/TankGameVR/{Tank,Cockpit,Targeting,Weapons,Combat,Settings,UI,Test
 - Destroyed or disabled targets are dropped at once; targets that leave view are dropped after
   `TargetSelectionSmoothing`. New waves are locked automatically. With no targets the aim drifts back to the front.
 - With Aim Assist off there is no locking: the stick aims freely, starting from where the crosshair was.
-- The crosshair is the projection of the real aim direction, so it glides onto the target
-  (`CrosshairTransitionSpeed`).
+- The turret is heavy, like a real one: it turns at `TurretTraverseSpeed` (30 deg/s; real tanks are about 25-40)
+  and spins up/brakes with `TurretTraverseAcceleration`, without overshooting. The gun elevates at
+  `GunElevationSpeed` (8 deg/s). A new lock therefore takes a moment to swing onto: the display shows
+  **LAYING GUN...** and a yellow crosshair until the gun is within `OnTargetTolerance`, then red.
+- The crosshair shows where the gun really points, and the shot goes there too, so firing while the turret is still
+  swinging misses. The manual stick can't run more than a few degrees ahead of the turret.
+- The turret angle is kept relative to the hull, so when the hull turns the turret has to catch up at its own speed.
 - Any actor with a `UTargetableComponent` is a target. Use `TargetPointOffset` for where the crosshair sits and
   `DisplayName` for the label.
 

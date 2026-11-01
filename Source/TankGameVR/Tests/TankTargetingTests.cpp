@@ -247,7 +247,7 @@ bool FTankOcclusionTest::RunTest(const FString& Parameters)
 
 	// Lock far to the right, then lose it: the aim drifts back to the hull forward.
 	FTargetScene Right({ 50 });
-	Right.Test.Tick(1.5f);
+	Right.Test.Tick(3.0f);
 	TestNotNull(TEXT("right target locked"), Right.Targeting->GetCurrentTarget());
 	const float LockedYaw = Right.Targeting->GetAimDirection().Rotation().Yaw;
 	Right.TargetsByBearing[50]->Destroy();
@@ -286,7 +286,9 @@ bool FTankAimAssistToggleTest::RunTest(const FString& Parameters)
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D::ZeroVector);
 	Scene.Test.Tick(0.5f);
 	const float YawAfter = Scene.Targeting->GetAimDirection().Rotation().Yaw;
-	TestTrue(FString::Printf(TEXT("manual aim follows the stick (%.1f -> %.1f deg)"), YawBefore, YawAfter), YawAfter - YawBefore > 30.0f);
+	// About turret speed: a second of full stick swings it ~20-30 degrees.
+	TestTrue(FString::Printf(TEXT("manual aim follows the stick (%.1f -> %.1f deg)"), YawBefore, YawAfter), YawAfter - YawBefore > 15.0f);
+	TestTrue(TEXT("but no faster than the turret"), YawAfter - YawBefore < Scene.Targeting->TurretTraverseSpeed * 1.5f + 5.0f);
 	TestNull(TEXT("manual aim does not lock even when crossing a target"), Scene.Targeting->GetCurrentTarget());
 
 	// Persistence: a fresh load from the slot returns the saved value.
@@ -329,17 +331,20 @@ bool FTankCrosshairTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("display shows the target"), Display->GetTargetString().Contains(TEXT("T-10")));
 	TestTrue(TEXT("display shows assist state"), Display->GetStatusString().Contains(TEXT("ON")));
 
-	// Crosshair moves over several frames, then settles.
+	// Crosshair (= the gun) swings over at turret speed, then settles.
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D(1.0, 0.0));
 	Scene.Test.Wrapper.TickTestWorld(1.0f / 90.0f);
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D::ZeroVector);
-	Scene.Test.Tick(0.05f);
+	Scene.Test.Tick(0.4f);
+	Display->UpdateDisplay();
+	TestTrue(TEXT("display says the gun is still being laid"), Display->GetTargetString().Contains(TEXT("LAYING")));
 	Display->UpdateDisplay();
 	const float MidX = Display->GetCrosshairUV().X;
 	TestTrue(FString::Printf(TEXT("crosshair in transit (x %.3f between %.3f and %.3f)"), MidX, TargetUV(-10).X, TargetUV(15).X), MidX > TargetUV(-10).X + 0.01 && MidX < TargetUV(15).X - 0.01);
-	Scene.Test.Tick(1.0f);
+	Scene.Test.Tick(2.5f);
 	Display->UpdateDisplay();
 	TestTrue(TEXT("crosshair arrives on the new target"), Display->GetCrosshairUV().Equals(TargetUV(15), 0.01));
+	TestFalse(TEXT("laid: no more LAYING"), Display->GetTargetString().Contains(TEXT("LAYING")));
 
 	Scene.TargetsByBearing[-10]->Destroy();
 	Scene.TargetsByBearing[15]->Destroy();
@@ -397,6 +402,42 @@ bool FTankJoystickTest::RunTest(const FString& Parameters)
 	Test.Tick(0.1f);
 	TestTrue(TEXT("thumbstick deflects the cockpit stick"), FMath::IsNearlyEqual(Stick->GetValue().X, 1.0, 0.01));
 	TestTrue(TEXT("visual tilt follows the value"), !Stick->GetRelativeRotation().Equals(FRotator::ZeroRotator, 1.0f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTurretTraverseTest, "Tank.Targeting.TurretTraverseIsHeavy", TankTestFlags)
+bool FTankTurretTraverseTest::RunTest(const FString& Parameters)
+{
+	// One target 55 degrees to the right: the turret must swing over at motor speed, not snap.
+	FTargetScene Scene({ 55 });
+	UTankTargetingComponent* Targeting = Scene.Targeting;
+	const float Dt = 1.0f / 90.0f;
+	float PreviousYaw = 0.0f;
+	float MaxRate = 0.0f;
+	float MaxYaw = 0.0f;
+	float LockedAt = -1.0f;
+	float OnTargetAt = -1.0f;
+	for (float Time = 0.0f; Time < 4.0f; Time += Dt)
+	{
+		Scene.Test.Wrapper.TickTestWorld(Dt);
+		const float Yaw = Targeting->GetAimDirection().Rotation().Yaw;
+		if (Time > 0.0f)
+		{
+			MaxRate = FMath::Max(MaxRate, FMath::Abs(FRotator::NormalizeAxis(Yaw - PreviousYaw)) / Dt);
+		}
+		MaxYaw = FMath::Max(MaxYaw, Yaw);
+		PreviousYaw = Yaw;
+		LockedAt = (LockedAt < 0.0f && Scene.Current()) ? Time : LockedAt;
+		OnTargetAt = (OnTargetAt < 0.0f && Targeting->IsOnTarget()) ? Time : OnTargetAt;
+	}
+	TestTrue(TEXT("target locked"), LockedAt >= 0.0f);
+	TestTrue(FString::Printf(TEXT("turret never faster than %.0f deg/s (max %.1f)"), Targeting->TurretTraverseSpeed, MaxRate), MaxRate <= Targeting->TurretTraverseSpeed + 0.5f);
+	const float Travel = OnTargetAt - LockedAt;
+	TestTrue(FString::Printf(TEXT("takes time to swing 55 deg (%.2f s)"), Travel), Travel > 55.0f / Targeting->TurretTraverseSpeed);
+	TestTrue(FString::Printf(TEXT("gets there (on target after %.2f s)"), Travel), OnTargetAt >= 0.0f && Travel < 3.5f);
+	const float GoalYaw = (Scene.TargetsByBearing[55]->GetActorLocation() - Targeting->GetAimOrigin()).Rotation().Yaw;
+	TestTrue(FString::Printf(TEXT("no overshoot (max yaw %.2f, goal %.2f)"), MaxYaw, GoalYaw), MaxYaw <= GoalYaw + 0.5f);
+	TestTrue(TEXT("crosshair matches the gun"), Targeting->GetAimError() <= Targeting->OnTargetTolerance);
 	return true;
 }
 

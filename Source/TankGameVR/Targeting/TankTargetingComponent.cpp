@@ -364,6 +364,10 @@ void UTankTargetingComponent::UpdateManualAim(float DeltaTime)
 	auto Shape = [this](double V) { return FMath::Abs(V) <= ManualAimDeadZone ? 0.0 : FMath::Sign(V) * (FMath::Abs(V) - ManualAimDeadZone) / (1.0 - ManualAimDeadZone); };
 	ManualYaw = FMath::Clamp(ManualYaw + Shape(AimInput.X) * ManualAimSpeed * DeltaTime, -ManualYawLimit, ManualYawLimit);
 	ManualPitch = FMath::Clamp(ManualPitch + Shape(AimInput.Y) * ManualAimSpeed * DeltaTime, ManualPitchRange.X, ManualPitchRange.Y);
+	// The stick can't run ahead of the turret: it stops a few degrees in front of the real gun.
+	constexpr float MaxLead = 4.0f;
+	ManualYaw = TurretYaw + FMath::Clamp(FMath::FindDeltaAngleDegrees(TurretYaw, ManualYaw), -MaxLead, MaxLead);
+	ManualPitch = GunPitch + FMath::Clamp(ManualPitch - GunPitch, -MaxLead, MaxLead);
 }
 
 void UTankTargetingComponent::SyncManualAnglesToAim()
@@ -374,6 +378,31 @@ void UTankTargetingComponent::SyncManualAnglesToAim()
 	UTargetSelectionMath::RelativeYawPitch(SightForward, GetAimDirection(), Yaw, Pitch);
 	ManualYaw = FMath::Clamp(Yaw, -ManualYawLimit, ManualYawLimit);
 	ManualPitch = FMath::Clamp(Pitch, ManualPitchRange.X, ManualPitchRange.Y);
+}
+
+namespace
+{
+	/** Moves one turret axis like a motor: limited speed and acceleration, brakes in time so it doesn't overshoot. */
+	float DriveAxis(float Current, float Error, float& Speed, float MaxSpeed, float Acceleration, float DeltaTime)
+	{
+		if (DeltaTime <= 0.0f)
+		{
+			return Current;
+		}
+		// Fastest speed from which we can still stop at the goal.
+		const float BrakeSpeed = FMath::Sqrt(2.0f * Acceleration * FMath::Abs(Error));
+		const float Wanted = FMath::Sign(Error) * FMath::Min(MaxSpeed, BrakeSpeed);
+		const bool bBraking = FMath::Abs(Wanted) < FMath::Abs(Speed) && FMath::Sign(Wanted) == FMath::Sign(Speed);
+		Speed = bBraking ? Wanted : FMath::FInterpConstantTo(Speed, Wanted, DeltaTime, Acceleration);
+
+		const float Step = Speed * DeltaTime;
+		if (FMath::Abs(Step) >= FMath::Abs(Error) && FMath::Sign(Step) == FMath::Sign(Error))
+		{
+			Speed = 0.0f;
+			return Current + Error;
+		}
+		return Current + Step;
+	}
 }
 
 void UTankTargetingComponent::UpdateAim(float DeltaTime)
@@ -392,14 +421,21 @@ void UTankTargetingComponent::UpdateAim(float DeltaTime)
 		}
 	}
 
-	const float Alpha = 1.0f - FMath::Exp(-CrosshairTransitionSpeed * FMath::Max(DeltaTime, 0.0f));
-	FQuat Next = FQuat::Slerp(AimRotation, Desired, Alpha);
+	// The turret chases the goal at its own pace; the sight and the shot follow the real gun.
+	float GoalYaw = 0.0f;
+	float GoalPitch = 0.0f;
+	const FVector SightForward = Sight.GetRotation().GetForwardVector();
+	UTargetSelectionMath::RelativeYawPitch(SightForward, Desired.GetForwardVector(), GoalYaw, GoalPitch);
+	GoalPitch = FMath::Clamp(GoalPitch, ManualPitchRange.X, ManualPitchRange.Y);
+
+	TurretYaw = FRotator::NormalizeAxis(DriveAxis(TurretYaw, FMath::FindDeltaAngleDegrees(TurretYaw, GoalYaw), TurretYawSpeed,
+		TurretTraverseSpeed, TurretTraverseAcceleration, DeltaTime));
+	GunPitch = DriveAxis(GunPitch, GoalPitch - GunPitch, GunPitchSpeed, GunElevationSpeed, GunElevationAcceleration, DeltaTime);
+
+	FQuat Next = Sight.GetRotation() * FRotator(GunPitch, TurretYaw, 0.0f).Quaternion();
 	Next.Normalize();
-	if (Next.ContainsNaN())
-	{
-		Next = Desired;
-	}
-	AimRotation = Next;
+	AimRotation = Next.ContainsNaN() ? Desired : Next;
+	AimError = FMath::RadiansToDegrees(AimRotation.AngularDistance(Desired));
 }
 
 void UTankTargetingComponent::UpdateTurretVisuals() const
