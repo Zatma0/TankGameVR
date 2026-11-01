@@ -1,4 +1,4 @@
-"""Tank input: IA_Tank_Drive / IA_Tank_Aim (Axis2D) and IMC_Tank.
+"""Tank input: IA_Tank_Drive / IA_Tank_Aim (Axis2D), IA_Tank_ToggleView / IA_Tank_Fire / IA_Tank_AutoLoad (buttons) and IMC_Tank.
 
 IMC_Tank is added above the VR template's IMC_Default while seated. It maps the *same* thumbstick axis keys the
 template uses for teleport (right stick Y) and snap turn (left stick X), so those keys drive the tank instead.
@@ -28,6 +28,11 @@ def make_action(name, value_type=unreal.InputActionValueType.AXIS2D):
 drive = make_action("IA_Tank_Drive")
 aim = make_action("IA_Tank_Aim")
 toggle_view = make_action("IA_Tank_ToggleView", unreal.InputActionValueType.BOOLEAN)
+fire = make_action("IA_Tank_Fire", unreal.InputActionValueType.BOOLEAN)
+auto_load = make_action("IA_Tank_AutoLoad", unreal.InputActionValueType.BOOLEAN)
+# The trigger also clicks the template menu and drives the hand pose, so firing must not swallow it.
+fire.set_editor_property("consume_input", False)
+eal.save_loaded_asset(fire)
 
 imc = get_or_create("IMC_Tank", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
 imc.unmap_all()
@@ -76,6 +81,17 @@ add(aim, "Down", swizzle=True, negate=True)
 # Cockpit / overview camera switch.
 for key in ["C", "Gamepad_FaceButton_Top", "OculusTouch_Left_X_Click", "PICO_Left_X_Click", "ValveIndex_Left_B_Click"]:
     add(toggle_view, key)
+
+# Main gun: either trigger in VR, Space/F on the keyboard, RT on a gamepad.
+for key in ["SpaceBar", "F", "Gamepad_RightTrigger"]:
+    add(fire, key)
+for vendor in ["OculusTouch", "ValveIndex", "PICO", "Vive"]:
+    for side in ["Left", "Right"]:
+        add(fire, f"{vendor}_{side}_Trigger_Click")
+
+# Hands-free loading for monitor play (in VR you load by hand).
+for key in ["R", "Gamepad_FaceButton_Left"]:
+    add(auto_load, key)
 
 apply_modifiers()
 eal.save_loaded_asset(imc)

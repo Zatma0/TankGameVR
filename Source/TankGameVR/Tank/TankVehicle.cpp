@@ -1,6 +1,10 @@
 #include "Tank/TankVehicle.h"
 #include "Tank/TankMovementComponent.h"
+#include "Cockpit/CockpitCigaretteComponent.h"
 #include "Cockpit/CockpitJoystickComponent.h"
+#include "Weapons/TankBreechComponent.h"
+#include "Weapons/TankCannonComponent.h"
+#include "Weapons/TankShellComponent.h"
 #include "Cockpit/TankSeatComponent.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "UI/CockpitDisplayWidget.h"
@@ -80,6 +84,30 @@ ATankVehicle::ATankVehicle()
 	Display->SetTwoSided(false);
 	Display->SetTickWhenOffscreen(true);
 
+	// Loader's side: ready rack left of the seat, breech in front of it, bore pointing forward.
+	Cannon = CreateDefaultSubobject<UTankCannonComponent>(TEXT("Cannon"));
+
+	Breech = CreateDefaultSubobject<UTankBreechComponent>(TEXT("Breech"));
+	Breech->SetupAttachment(CockpitRoot);
+	Breech->SetRelativeLocation(FVector(22.0, -56.0, 64.0));
+
+	auto MakeRound = [this](const TCHAR* Name, int32 Slot)
+	{
+		UTankShellComponent* Round = CreateDefaultSubobject<UTankShellComponent>(Name);
+		Round->SetupAttachment(CockpitRoot);
+		Round->SetRelativeLocation(FVector(-30.0, -56.0, 45.0 + 15.0 * Slot));
+		return Round;
+	};
+	ShellA = MakeRound(TEXT("ShellA"), 0);
+	ShellB = MakeRound(TEXT("ShellB"), 1);
+	ShellC = MakeRound(TEXT("ShellC"), 2);
+
+	// On the ashtray, right side of the dashboard.
+	Cigarette = CreateDefaultSubobject<UCockpitCigaretteComponent>(TEXT("Cigarette"));
+	Cigarette->SetupAttachment(CockpitRoot);
+	Cigarette->SetRelativeLocation(FVector(62.0, 40.0, 86.0));
+	Cigarette->SetRelativeRotation(FRotator(0.0, 25.0, 0.0));
+
 	// Overview camera behind and above the hull.
 	OverviewArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("OverviewArm"));
 	OverviewArm->SetupAttachment(HullCollision);
@@ -117,7 +145,28 @@ void ATankVehicle::BeginPlay()
 	if (UCockpitDisplayWidget* DisplayWidget = Cast<UCockpitDisplayWidget>(Display->GetWidget()))
 	{
 		DisplayWidget->SetTargeting(Targeting);
+		DisplayWidget->SetBreech(Breech);
 	}
+}
+
+TArray<UTankShellComponent*> ATankVehicle::GetShells() const
+{
+	return { ShellA, ShellB, ShellC };
+}
+
+bool ATankVehicle::Fire()
+{
+	return Cannon->Fire();
+}
+
+void ATankVehicle::OnFire(const FInputActionValue& Value)
+{
+	Fire();
+}
+
+void ATankVehicle::OnAutoLoad(const FInputActionValue& Value)
+{
+	Breech->AutoLoad();
 }
 
 void ATankVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -183,6 +232,14 @@ void ATankVehicle::HandleBoarded(APawn* Pawn)
 	if (ToggleViewAction)
 	{
 		EnhancedInput->BindAction(ToggleViewAction, ETriggerEvent::Started, this, &ATankVehicle::OnToggleView);
+	}
+	if (FireAction)
+	{
+		EnhancedInput->BindAction(FireAction, ETriggerEvent::Started, this, &ATankVehicle::OnFire);
+	}
+	if (AutoLoadAction)
+	{
+		EnhancedInput->BindAction(AutoLoadAction, ETriggerEvent::Started, this, &ATankVehicle::OnAutoLoad);
 	}
 }
 

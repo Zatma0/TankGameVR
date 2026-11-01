@@ -3,7 +3,9 @@ BP_EnemyTank_Placeholder / BP_EnemyTank_TestMoving and BP_TankTestWaveSpawner.
 
 All meshes are plain engine shapes with placeholder materials. Every visual is a separate, named component that
 teammates can delete or re-point to final meshes; the gameplay code only uses the C++ components
-(HullCollision, TurretPivot, BarrelPivot, AimOrigin, SightFrame, CockpitRoot, Seat, DriveStick, AimStick, Display)."""
+(HullCollision, TurretPivot, BarrelPivot, AimOrigin, SightFrame, CockpitRoot, Seat, DriveStick, AimStick, Display,
+Breech, ShellA/B/C, Cigarette) and a few named visuals (BreechBlock, ReadyLamp, CasingStub, MuzzleFlash,
+MuzzleFlashLight, CigaretteEmber, CigaretteGlow)."""
 import unreal
 
 eal = unreal.EditorAssetLibrary
@@ -16,6 +18,7 @@ MAT = "/Game/TankGame/Materials"
 CUBE = unreal.load_asset("/Engine/BasicShapes/Cube")
 CYLINDER = unreal.load_asset("/Engine/BasicShapes/Cylinder")
 SPHERE = unreal.load_asset("/Engine/BasicShapes/Sphere")
+CONE = unreal.load_asset("/Engine/BasicShapes/Cone")
 GRAB_CLASS = unreal.load_asset("/Game/XRFramework/Blueprints/BP_GrabComponent").generated_class()
 
 
@@ -93,6 +96,63 @@ def build_stick(bp, prefix, stick_component, knob_material):
     return knob, grab
 
 
+def grab(bp, name, surface):
+    comp = component(bp, name, GRAB_CLASS, surface)
+    comp.set_editor_property("GrabType", type(comp.get_editor_property("GrabType")).CUSTOM)
+    return comp
+
+
+def point_light(bp, name, parent, location, intensity, radius, color):
+    light = component(bp, name, unreal.PointLightComponent, parent)
+    light.set_editor_property("relative_location", unreal.Vector(*location))
+    light.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+    light.set_editor_property("intensity", intensity)
+    light.set_editor_property("attenuation_radius", radius)
+    light.set_editor_property("cast_shadows", False)
+    light.set_editor_property("light_color", color)
+    return light
+
+
+def build_gun(bp):
+    """Ready rack with three rounds, the breech and the muzzle flash. Round axis = X, nose at +25 cm."""
+    for name in ("ShellA", "ShellB", "ShellC"):
+        mesh(bp, f"{name}Case", name, CYLINDER, mat("MI_Ammo_Case"), (-7.5, 0, 0), (12, 12, 35), (90.0, 0.0, 0.0))
+        mesh(bp, f"{name}Body", name, CYLINDER, mat("MI_Ammo_Tip"), (13.5, 0, 0), (11, 11, 7), (90.0, 0.0, 0.0))
+        mesh(bp, f"{name}Nose", name, CONE, mat("MI_Ammo_Tip"), (21, 0, 0), (11, 11, 8), (-90.0, 0.0, 0.0))
+        grab(bp, f"{name}Grab", f"{name}Case")
+
+    # Rack (rounds at x -55..-5, y -56, z 45/60/75).
+    mesh(bp, "AmmoRackBase", "CockpitRoot", CUBE, mat("MI_Ammo_Rack"), (-30, -56, 36), (56, 20, 4))
+    mesh(bp, "AmmoRackRear", "CockpitRoot", CUBE, mat("MI_Ammo_Rack"), (-59, -56, 60), (4, 20, 50))
+    mesh(bp, "AmmoRackCradleRear", "CockpitRoot", CUBE, mat("MI_Ammo_Rack"), (-45, -64, 60), (4, 4, 46))
+    mesh(bp, "AmmoRackCradleFront", "CockpitRoot", CUBE, mat("MI_Ammo_Rack"), (-15, -64, 60), (4, 4, 46))
+    label(bp, "AmmoLabel", "CockpitRoot", "AMMO", (-30, -56, 90), 3.5)
+
+    # Breech: 14 x 14 cm mouth at the component, housing runs forward.
+    mesh(bp, "BreechTop", "Breech", CUBE, mat("MI_Gun_Breech"), (24, 0, 10), (48, 26, 6))
+    mesh(bp, "BreechBottom", "Breech", CUBE, mat("MI_Gun_Breech"), (24, 0, -10), (48, 26, 6))
+    mesh(bp, "BreechLeft", "Breech", CUBE, mat("MI_Gun_Breech"), (24, -10, 0), (48, 6, 14))
+    mesh(bp, "BreechRight", "Breech", CUBE, mat("MI_Gun_Breech"), (24, 10, 0), (48, 6, 14))
+    mesh(bp, "BreechBlock", "Breech", CUBE, mat("MI_Tank_Barrel"), (-3, 0, 0), (5, 26, 26))
+    mesh(bp, "ReadyLamp", "Breech", SPHERE, mat("MI_Gun_ReadyLamp"), (-2, 0, 17), (4, 4, 4))
+    mesh(bp, "CasingStub", "Breech", CYLINDER, mat("MI_Ammo_Case"), (0, 0, 0), (12, 12, 6), (90.0, 0.0, 0.0))
+    label(bp, "BreechLabel", "Breech", "LOAD", (-2, 0, 22), 3.5)
+
+    # Shown for a moment on each shot (the barrel is 350 cm long).
+    mesh(bp, "MuzzleFlash", "BarrelPivot", SPHERE, mat("MI_Tank_MuzzleFlash"), (375, 0, 0), (70, 45, 45))
+    point_light(bp, "MuzzleFlashLight", "BarrelPivot", (390, 0, 0), 300.0, 2500.0, unreal.Color(255, 190, 110, 255))
+
+
+def build_cigarette(bp):
+    """Cigarette on an ashtray, right side of the dashboard. Axis = X, ember at +5 cm, filter at -5 cm."""
+    mesh(bp, "Ashtray", "CockpitRoot", CYLINDER, mat("MI_Ashtray"), (62, 40, 84), (11, 11, 2))
+    mesh(bp, "CigarettePaper", "Cigarette", CYLINDER, mat("MI_Cigarette_Paper"), (1.25, 0, 0), (1.2, 1.2, 7.5), (90.0, 0.0, 0.0))
+    mesh(bp, "CigaretteFilter", "Cigarette", CYLINDER, mat("MI_Cigarette_Filter"), (-3.75, 0, 0), (1.25, 1.25, 2.5), (90.0, 0.0, 0.0))
+    mesh(bp, "CigaretteEmber", "Cigarette", CYLINDER, mat("MI_Cigarette_Ember"), (5.3, 0, 0), (1.15, 1.15, 0.6), (90.0, 0.0, 0.0))
+    point_light(bp, "CigaretteGlow", "Cigarette", (6.5, 0, 0), 0.0, 35.0, unreal.Color(255, 120, 40, 255))
+    grab(bp, "CigaretteGrab", "CigarettePaper")
+
+
 def build_player_tank():
     bp = get_or_create_bp(f"{BP_DIR}/Tank", "BP_PlayerTank", unreal.TankVehicle)
 
@@ -130,6 +190,8 @@ def build_player_tank():
     build_stick(bp, "Aim", "AimStick", mat("MI_Control_AimKnob"))
     label(bp, "DriveLabel", "CockpitRoot", "DRIVE", (40, -26, 104))
     label(bp, "AimLabel", "CockpitRoot", "AIM", (40, 26, 104))
+    build_gun(bp)
+    build_cigarette(bp)
 
     # Small fill light so the cockpit is readable when the hull shadows it (no shadows: cheap for VR).
     light = component(bp, "CockpitLight", unreal.PointLightComponent, "CockpitRoot")
@@ -146,6 +208,8 @@ def build_player_tank():
     cdo.set_editor_property("drive_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Drive"))
     cdo.set_editor_property("aim_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Aim"))
     cdo.set_editor_property("toggle_view_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_ToggleView"))
+    cdo.set_editor_property("fire_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Fire"))
+    cdo.set_editor_property("auto_load_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_AutoLoad"))
     compile_save(bp)
     return bp
 
@@ -156,10 +220,14 @@ def build_enemies():
     hull.set_collision_profile_name("BlockAllDynamic")
     mesh(base, "TrackLeft", "__root__", CUBE, mat("MI_Tank_Tracks"), (0, -160, 40), (540, 40, 80))
     mesh(base, "TrackRight", "__root__", CUBE, mat("MI_Tank_Tracks"), (0, 160, 40), (540, 40, 80))
-    mesh(base, "Turret", "__root__", CYLINDER, mat("MI_Enemy_Turret"), (-30, 0, 140), (200, 200, 60))
+    # The lock-on point is turret height, so the turret has to stop shells too.
+    turret = mesh(base, "Turret", "__root__", CYLINDER, mat("MI_Enemy_Turret"), (-30, 0, 140), (200, 200, 60))
+    turret.set_collision_profile_name("BlockAllDynamic")
     mesh(base, "Barrel", "__root__", CYLINDER, mat("MI_Tank_Barrel"), (170, 0, 145), (14, 14, 300), (90.0, 0.0, 0.0))
     targetable = component(base, "Targetable", unreal.TargetableComponent, "__root__")
     targetable.set_editor_property("target_point_offset", unreal.Vector(0, 0, 130))
+    health = component(base, "Health", unreal.TankHealthComponent, "__root__")
+    health.set_editor_property("max_health", 50.0)
     compile_save(base)
 
     moving = get_or_create_bp(f"{BP_DIR}/Enemies", "BP_EnemyTank_TestMoving", base.generated_class())

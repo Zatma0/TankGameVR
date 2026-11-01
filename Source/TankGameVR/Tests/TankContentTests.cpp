@@ -6,6 +6,9 @@
 #include "Tests/TankTestUtils.h"
 #include "Cockpit/CockpitJoystickComponent.h"
 #include "Cockpit/TankSeatComponent.h"
+#include "Combat/TankHealthComponent.h"
+#include "Weapons/TankBreechComponent.h"
+#include "Weapons/TankShellComponent.h"
 #include "Settings/TankSettingsSubsystem.h"
 #include "Tank/TankMovementComponent.h"
 #include "Tank/TankVehicle.h"
@@ -102,19 +105,30 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TSet<FKey> TankKeys;
-	TSet<FKey> ToggleViewKeys;
+	TMap<FString, TSet<FKey>> ButtonKeys;
+	const UInputAction* FireAction = nullptr;
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
-		if (Mapping.Action && Mapping.Action->GetName() == TEXT("IA_Tank_ToggleView"))
+		const FString ActionName = Mapping.Action ? Mapping.Action->GetName() : FString();
+		if (ActionName == TEXT("IA_Tank_ToggleView") || ActionName == TEXT("IA_Tank_Fire") || ActionName == TEXT("IA_Tank_AutoLoad"))
 		{
-			ToggleViewKeys.Add(Mapping.Key);
-			TestEqual(TEXT("view toggle is a button"), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Boolean));
+			ButtonKeys.FindOrAdd(ActionName).Add(Mapping.Key);
+			TestEqual(FString::Printf(TEXT("%s is a button"), *ActionName), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Boolean));
+			FireAction = ActionName == TEXT("IA_Tank_Fire") ? Mapping.Action.Get() : FireAction;
 			continue;
 		}
 		TankKeys.Add(Mapping.Key);
 		TestEqual(TEXT("tank actions are 2D axes"), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Axis2D));
 	}
+	const TSet<FKey>& ToggleViewKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_ToggleView"));
+	const TSet<FKey>& FireKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_Fire"));
+	const TSet<FKey>& AutoLoadKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_AutoLoad"));
 	TestTrue(TEXT("view toggle on C and gamepad Y"), ToggleViewKeys.Contains(EKeys::C) && ToggleViewKeys.Contains(EKeys::Gamepad_FaceButton_Top));
+	TestTrue(TEXT("fire on Space, RT and both Touch triggers"), FireKeys.Contains(EKeys::SpaceBar) && FireKeys.Contains(EKeys::Gamepad_RightTrigger)
+		&& FireKeys.Contains(FKey(TEXT("OculusTouch_Right_Trigger_Click"))) && FireKeys.Contains(FKey(TEXT("OculusTouch_Left_Trigger_Click"))));
+	TestTrue(TEXT("trigger keys are real keys"), FKey(TEXT("OculusTouch_Right_Trigger_Click")).IsValid());
+	TestTrue(TEXT("fire does not swallow the trigger (menu laser, hand pose)"), FireAction && !FireAction->bConsumeInput);
+	TestTrue(TEXT("auto load on R"), AutoLoadKeys.Contains(EKeys::R));
 	// Every key the template uses for teleport/snap turn must be claimed while seated.
 	for (const FEnhancedActionKeyMapping& Mapping : TemplateContext->GetMappings())
 	{
@@ -123,8 +137,9 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		{
 			TestTrue(FString::Printf(TEXT("%s key %s is overridden by the tank"), *ActionName, *Mapping.Key.ToString()), TankKeys.Contains(Mapping.Key));
 		}
-		// The toggle must not use a button the template already uses.
+		// Buttons must not take one the template already uses.
 		TestFalse(FString::Printf(TEXT("view toggle key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), ToggleViewKeys.Contains(Mapping.Key));
+		TestFalse(FString::Printf(TEXT("auto load key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), AutoLoadKeys.Contains(Mapping.Key));
 	}
 	TestTrue(TEXT("keyboard drive fallback"), TankKeys.Contains(EKeys::W) && TankKeys.Contains(EKeys::D));
 	TestTrue(TEXT("keyboard aim fallback"), TankKeys.Contains(EKeys::Left) && TankKeys.Contains(EKeys::Right));
@@ -136,7 +151,7 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	};
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
-		if (ToggleViewKeys.Contains(Mapping.Key))
+		if (!Mapping.Action || Mapping.Action->ValueType != EInputActionValueType::Axis2D)
 		{
 			continue;
 		}
@@ -176,10 +191,22 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("drive action assigned"), Tank->DriveAction.Get());
 	TestNotNull(TEXT("aim action assigned"), Tank->AimAction.Get());
 	TestNotNull(TEXT("view toggle action assigned"), Tank->ToggleViewAction.Get());
+	TestNotNull(TEXT("fire action assigned"), Tank->FireAction.Get());
+	TestNotNull(TEXT("auto load action assigned"), Tank->AutoLoadAction.Get());
 	TestTrue(TEXT("display uses the cockpit display widget"), Cast<UCockpitDisplayWidget>(Tank->GetDisplay()->GetWidget()) != nullptr);
-
-	for (const TCHAR* KnobName : { TEXT("DriveKnob"), TEXT("AimKnob") })
+	for (const TCHAR* Name : { TEXT("BreechBlock"), TEXT("ReadyLamp"), TEXT("CasingStub"), TEXT("MuzzleFlash"), TEXT("MuzzleFlashLight"),
+		TEXT("ShellAGrab"), TEXT("ShellBGrab"), TEXT("ShellCGrab"), TEXT("CigaretteGrab"), TEXT("CigaretteEmber"), TEXT("CigaretteGlow") })
 	{
+		TestNotNull(FString::Printf(TEXT("%s exists"), Name), FindComponentByName(Tank, Name));
+	}
+	USceneComponent* Flash = FindComponentByName(Tank, TEXT("MuzzleFlash"));
+	TestTrue(TEXT("muzzle flash hidden until a shot"), Flash && !Flash->IsVisible());
+
+	// Everything the VR hand can pick up.
+	const TArray<FString> GrabSurfaces = { TEXT("DriveKnob"), TEXT("AimKnob"), TEXT("ShellACase"), TEXT("ShellBCase"), TEXT("ShellCCase"), TEXT("CigarettePaper") };
+	for (const FString& KnobString : GrabSurfaces)
+	{
+		const TCHAR* KnobName = *KnobString;
 		UPrimitiveComponent* Knob = Cast<UPrimitiveComponent>(FindComponentByName(Tank, KnobName));
 		if (!TestNotNull(FString::Printf(TEXT("%s exists"), KnobName), Knob))
 		{
@@ -196,7 +223,7 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	int32 Colliding = 0;
 	for (UStaticMeshComponent* Mesh : Meshes)
 	{
-		const bool bKnob = Mesh->GetName().EndsWith(TEXT("Knob"));
+		const bool bKnob = GrabSurfaces.Contains(Mesh->GetName());
 		Colliding += (!bKnob && Mesh->GetCollisionEnabled() != ECollisionEnabled::NoCollision) ? 1 : 0;
 	}
 	TestEqual(TEXT("placeholder meshes have no collision"), Colliding, 0);
@@ -249,6 +276,87 @@ bool FTankContentGrabStickTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("released"), Stick->IsHeld());
 	TestTrue(TEXT("stick springs back"), Stick->GetValue().IsNearlyZero(0.01));
 	TestTrue(TEXT("knob still on the stick after release"), Knob->GetAttachParent() == Stick);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankContentGrabShellTest, "Tank.Content.VRGrabAndLoadShell", TankTestFlags)
+bool FTankContentGrabShellTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	Test.World->SpawnActor<APlayerController>();
+	ATankVehicle* Tank = SpawnPlayerTank(Test);
+	Test.Tick(0.2f);
+
+	AActor* HandActor = Test.World->SpawnActor<AActor>();
+	UMotionControllerComponent* Hand = NewObject<UMotionControllerComponent>(HandActor, TEXT("MotionControllerLeftGrip"));
+	Hand->SetTrackingMotionSource(FName(TEXT("Left")));
+	HandActor->SetRootComponent(Hand);
+	Hand->RegisterComponent();
+	HandActor->AttachToActor(Tank, FAttachmentTransformRules::KeepWorldTransform);
+
+	UTankShellComponent* Round = Tank->GetShells().Last();
+	UTankBreechComponent* Breech = Tank->GetBreech();
+	USceneComponent* Grab = FindComponentByName(Tank, TEXT("ShellCGrab"));
+	if (!TestNotNull(TEXT("ShellCGrab"), Grab))
+	{
+		return false;
+	}
+	HandActor->SetActorLocation(Grab->GetComponentLocation());
+	TestTrue(TEXT("template TryGrab succeeds on the round"), CallBlueprintFunction(Grab, TEXT("TryGrab"), Hand));
+	Test.Tick(0.05f);
+	TestTrue(TEXT("round sees the hand"), Round->IsHeld());
+	TestTrue(TEXT("custom grab: the round is not attached to the hand"), Round->GetAttachParent() != Hand);
+
+	HandActor->AddActorWorldOffset(Breech->GetComponentLocation() - Breech->GetForwardVector() * 2.0 - Round->GetNoseLocation());
+	Test.Tick(0.05f);
+	TestEqual(TEXT("round enters the breech"), Breech->GetState(), ETankBreechState::Ramming);
+	for (int32 Step = 0; Step < 10; ++Step)
+	{
+		HandActor->AddActorWorldOffset(Breech->GetForwardVector() * 6.0);
+		Test.Tick(0.03f);
+	}
+	Test.Tick(0.5f);
+	TestTrue(TEXT("loaded through the template grab"), Breech->IsLoaded());
+	TestTrue(TEXT("template TryRelease succeeds"), CallBlueprintFunction(Grab, TEXT("TryRelease"), nullptr));
+	Test.Tick(0.1f);
+	TestTrue(TEXT("still loaded after letting go"), Breech->IsLoaded());
+
+	UCockpitDisplayWidget* Display = Cast<UCockpitDisplayWidget>(Tank->GetDisplay()->GetWidget());
+	if (Display)
+	{
+		Display->UpdateDisplay();
+		TestTrue(TEXT("cockpit display shows UP"), Display->GetGunString().StartsWith(TEXT("UP")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankContentEnemyHitTest, "Tank.Content.CannonKillsEnemy", TankTestFlags)
+bool FTankContentEnemyHitTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	ATankVehicle* Tank = SpawnPlayerTank(Test);
+	AActor* Enemy = Test.World->SpawnActor<AActor>(LoadBlueprintClass(TEXT("/Game/TankGame/Blueprints/Enemies/BP_EnemyTank_Placeholder")), FTransform(FVector(3000, 0, 0)));
+	if (!TestNotNull(TEXT("enemy spawns"), Enemy))
+	{
+		return false;
+	}
+	UTankHealthComponent* Health = Enemy->FindComponentByClass<UTankHealthComponent>();
+	if (!TestNotNull(TEXT("enemy placeholder has health"), Health))
+	{
+		return false;
+	}
+	Test.Tick(1.0f);
+	TestTrue(TEXT("enemy locked"), Tank->GetTargeting()->GetCurrentTarget() != nullptr);
+
+	const float Start = Health->GetHealth();
+	for (int32 Shot = 0; Shot < 2; ++Shot)
+	{
+		TestTrue(TEXT("auto load"), Tank->GetBreech()->AutoLoad());
+		Test.Tick(1.6f);
+		TestTrue(TEXT("fire"), Tank->Fire());
+		Test.Tick(0.8f);
+	}
+	TestTrue(FString::Printf(TEXT("two hits kill the 50 HP placeholder (HP %.0f -> %.0f)"), Start, Health->GetHealth()), !IsValid(Enemy) || Enemy->IsActorBeingDestroyed() || Health->IsDead());
 	return true;
 }
 

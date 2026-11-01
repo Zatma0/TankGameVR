@@ -6,6 +6,7 @@
 
 class UBorder;
 class UCanvasPanel;
+class UTankBreechComponent;
 class UTankTargetingComponent;
 class UTextBlock;
 
@@ -45,8 +46,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display|Colors")
 	FLinearColor IdleColor = FLinearColor(0.85f, 0.95f, 0.85f);
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Display|Colors")
+	FLinearColor ReadyColor = FLinearColor(0.3f, 1.0f, 0.35f);
+
 	UFUNCTION(BlueprintCallable, Category = "Display")
 	void SetTargeting(UTankTargetingComponent* InTargeting);
+
+	UFUNCTION(BlueprintCallable, Category = "Display")
+	void SetBreech(UTankBreechComponent* InBreech);
+
+	UFUNCTION(BlueprintPure, Category = "Display")
+	FString GetGunString() const { return LastGunLine; }
 
 	/** 0..1 */
 	UFUNCTION(BlueprintPure, Category = "Display")
@@ -78,6 +88,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TargetText;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> GunText;
+
 private:
 	void BuildDefaultLayout();
 	UBorder* MakeRing(const FLinearColor& Color, float Thickness, bool bCircle);
@@ -88,8 +101,12 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UBorder>> Markers;
 
+	void UpdateGunLine();
+
 	TWeakObjectPtr<UTankTargetingComponent> Targeting;
+	TWeakObjectPtr<UTankBreechComponent> Breech;
 	FVector2D CrosshairUV = FVector2D(0.5, 0.5);
+	FString LastGunLine;
 	FString LastStatus;
 	FString LastTargetLine;
 };

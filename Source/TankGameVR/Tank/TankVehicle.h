@@ -9,8 +9,12 @@ class UBoxComponent;
 class UCameraComponent;
 class USpringArmComponent;
 class UUserWidget;
+class UCockpitCigaretteComponent;
 class UCockpitJoystickComponent;
 class UInputAction;
+class UTankBreechComponent;
+class UTankCannonComponent;
+class UTankShellComponent;
 class UInputMappingContext;
 class UTankMovementComponent;
 class UTankSeatComponent;
@@ -44,6 +48,14 @@ public:
 	/** Button: switch between the cockpit view and the overview camera. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> ToggleViewAction;
+
+	/** Button: fire the main gun (controller trigger). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> FireAction;
+
+	/** Button: load a round without hands (keyboard/gamepad play). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> AutoLoadAction;
 
 	/** Above the template's IMC_Default (0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
@@ -86,6 +98,21 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tank")
 	UWidgetComponent* GetDisplay() const { return Display; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Weapons")
+	UTankBreechComponent* GetBreech() const { return Breech; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Weapons")
+	UTankCannonComponent* GetCannon() const { return Cannon; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Weapons")
+	TArray<UTankShellComponent*> GetShells() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	UCockpitCigaretteComponent* GetCigarette() const { return Cigarette; }
+
+	UFUNCTION(BlueprintCallable, Category = "Tank|Weapons")
+	bool Fire();
 
 	/** Thumbstick/keyboard values (tests set them directly). */
 	UFUNCTION(BlueprintCallable, Category = "Tank|Input")
@@ -136,7 +163,26 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
 	TObjectPtr<UWidgetComponent> Display;
 
-		UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankCannonComponent> Cannon;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankBreechComponent> Breech;
+
+	/** Ready rack, left of the seat. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankShellComponent> ShellA;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankShellComponent> ShellB;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankShellComponent> ShellC;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitCigaretteComponent> Cigarette;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
 	TObjectPtr<USpringArmComponent> OverviewArm;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
@@ -148,6 +194,8 @@ private:
 	void OnAimAction(const FInputActionValue& Value);
 	void OnAimReleased(const FInputActionValue& Value);
 	void OnToggleView(const FInputActionValue& Value);
+	void OnFire(const FInputActionValue& Value);
+	void OnAutoLoad(const FInputActionValue& Value);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> OverviewHud;

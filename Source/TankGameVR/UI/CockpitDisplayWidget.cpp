@@ -3,6 +3,7 @@
 #include "Targeting/TargetRegistrySubsystem.h"
 #include "Targeting/TargetableComponent.h"
 #include "Targeting/TargetSelectionMath.h"
+#include "Weapons/TankBreechComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -97,12 +98,38 @@ void UCockpitDisplayWidget::BuildDefaultLayout()
 	UCanvasPanelSlot* TargetSlot = Canvas->AddChildToCanvas(TargetText);
 	TargetSlot->SetPosition(FVector2D(28.0, DisplaySize.Y - 70.0));
 	TargetSlot->SetAutoSize(true);
+
+	// Gun state, top right.
+	GunText = MakeText(30);
+	UCanvasPanelSlot* GunSlot = Canvas->AddChildToCanvas(GunText);
+	GunSlot->SetAnchors(FAnchors(1.0f, 0.0f));
+	GunSlot->SetAlignment(FVector2D(1.0, 0.0));
+	GunSlot->SetPosition(FVector2D(-28.0, 20.0));
+	GunSlot->SetAutoSize(true);
 }
 
 void UCockpitDisplayWidget::SetTargeting(UTankTargetingComponent* InTargeting)
 {
 	Targeting = InTargeting;
 	UpdateDisplay();
+}
+
+void UCockpitDisplayWidget::SetBreech(UTankBreechComponent* InBreech)
+{
+	Breech = InBreech;
+	UpdateGunLine();
+}
+
+void UCockpitDisplayWidget::UpdateGunLine()
+{
+	const UTankBreechComponent* Breech_ = Breech.Get();
+	LastGunLine = Breech_ ? Breech_->GetStatusText() : FString();
+	if (GunText)
+	{
+		GunText->SetText(FText::FromString(LastGunLine));
+		const bool bReady = Breech_ && Breech_->IsLoaded();
+		GunText->SetColorAndOpacity(FSlateColor(bReady ? ReadyColor : SelectableColor));
+	}
 }
 
 void UCockpitDisplayWidget::PlaceCentered(UWidget* Widget, const FVector2D& UV, const FVector2D& Size) const
@@ -122,6 +149,7 @@ void UCockpitDisplayWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 
 void UCockpitDisplayWidget::UpdateDisplay()
 {
+	UpdateGunLine();
 	const UTankTargetingComponent* Targeting_ = Targeting.Get();
 	if (!Targeting_)
 	{

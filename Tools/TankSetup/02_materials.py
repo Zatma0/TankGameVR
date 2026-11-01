@@ -1,4 +1,5 @@
 """Placeholder materials: one master (colour, roughness, metallic, emissive) and readable instances per role.
+Re-running keeps the existing master and only updates/adds instances.
 Teammates replace these with final materials by reassigning slots on the Blueprint meshes; no code references them."""
 import unreal
 
@@ -15,8 +16,8 @@ def linear(r, g, b):
 def build_master():
     path = f"{DIR}/M_TankPlaceholder"
     if eal.does_asset_exist(path):
-        eal.delete_asset(path)
-    m = tools.create_asset("M_TankPlaceholder", DIR, unreal.Material, unreal.MaterialFactoryNew())
+        return eal.load_asset(path)
+    m =tools.create_asset("M_TankPlaceholder", DIR, unreal.Material, unreal.MaterialFactoryNew())
 
     def vec(name, value, x, y):
         e = mel.create_material_expression(m, unreal.MaterialExpressionVectorParameter, x, y)
@@ -61,6 +62,20 @@ INSTANCES = {
     "MI_Enemy_Turret":       ((0.30, 0.10, 0.08), 0.65, 0.2, 0.0),
     "MI_Env_Ground":         ((0.42, 0.40, 0.33), 0.95, 0.0, 0.0),
     "MI_Env_Obstacle":       ((0.55, 0.55, 0.52), 0.9, 0.0, 0.0),
+    # Gun and ammo
+    "MI_Ammo_Case":          ((0.80, 0.60, 0.25), 0.35, 0.9, 0.0),
+    "MI_Ammo_Tip":           ((0.22, 0.24, 0.20), 0.5, 0.4, 0.0),
+    "MI_Ammo_Rack":          ((0.12, 0.13, 0.12), 0.7, 0.3, 0.0),
+    "MI_Gun_Breech":         ((0.26, 0.28, 0.25), 0.45, 0.7, 0.0),
+    "MI_Gun_ReadyLamp":      ((0.20, 1.00, 0.30), 0.3, 0.0, 0.3),
+    "MI_Tank_Tracer":        ((1.00, 0.65, 0.30), 0.3, 0.0, 30.0),
+    "MI_Tank_MuzzleFlash":   ((1.00, 0.75, 0.40), 0.3, 0.0, 60.0),
+    # Cigarette
+    "MI_Cigarette_Paper":    ((0.95, 0.94, 0.90), 0.8, 0.0, 0.0),
+    "MI_Cigarette_Filter":   ((0.85, 0.55, 0.25), 0.8, 0.0, 0.0),
+    "MI_Cigarette_Ember":    ((1.00, 0.35, 0.05), 0.6, 0.0, 1.0),
+    "MI_Cigarette_Smoke":    ((0.80, 0.80, 0.80), 1.0, 0.0, 0.25),
+    "MI_Ashtray":            ((0.35, 0.36, 0.38), 0.3, 0.8, 0.0),
 }
 
 master = build_master()

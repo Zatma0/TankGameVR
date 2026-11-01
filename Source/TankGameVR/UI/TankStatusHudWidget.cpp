@@ -4,6 +4,7 @@
 #include "Targeting/TankTargetingComponent.h"
 #include "Targeting/TargetRegistrySubsystem.h"
 #include "Targeting/TargetableComponent.h"
+#include "Weapons/TankBreechComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -90,7 +91,11 @@ void UTankStatusHudWidget::UpdateStatus()
 		{
 			TargetCount = Registry->GetValidTargetCount();
 		}
-		LastStatus += FString::Printf(TEXT("TARGETS IN AREA: %d"), TargetCount);
+		LastStatus += FString::Printf(TEXT("TARGETS IN AREA: %d\n"), TargetCount);
+		if (const UTankBreechComponent* Breech = Tank_->GetBreech())
+		{
+			LastStatus += FString::Printf(TEXT("GUN: %s   [R: load, Space: fire]"), *Breech->GetStatusText());
+		}
 	}
 
 	if (StatusText)

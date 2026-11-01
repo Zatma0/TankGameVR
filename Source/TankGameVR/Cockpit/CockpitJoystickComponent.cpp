@@ -1,6 +1,5 @@
 #include "Cockpit/CockpitJoystickComponent.h"
-#include "Components/PrimitiveComponent.h"
-#include "UObject/UnrealType.h"
+#include "Cockpit/CockpitGrabUtils.h"
 
 UCockpitJoystickComponent::UCockpitJoystickComponent()
 {
@@ -18,58 +17,18 @@ void UCockpitJoystickComponent::BeginPlay()
 
 USceneComponent* UCockpitJoystickComponent::FindGrabComponent() const
 {
-	TArray<USceneComponent*> Children;
-	GetChildrenComponents(true, Children);
-	for (USceneComponent* Child : Children)
-	{
-		const bool bNameMatches = !GrabComponentName.IsNone() && Child->GetFName() == GrabComponentName;
-		const bool bClassMatches = GrabComponentName.IsNone() && Child->GetClass()->GetName().Contains(TEXT("GrabComponent"));
-		if (bNameMatches || bClassMatches)
-		{
-			return Child;
-		}
-	}
-	return nullptr;
+	return CockpitGrab::FindGrabComponent(this, GrabComponentName);
 }
 
 void UCockpitJoystickComponent::ApplyKnobCollision()
 {
-	// BP_GrabComponent sets its parent to PhysicsActor in BeginPlay. The knob has to stay PhysicsBody for the
-	// grab trace but must not collide.
 	bCollisionApplied = true;
-	if (UPrimitiveComponent* Knob = GrabComponent ? Cast<UPrimitiveComponent>(GrabComponent->GetAttachParent()) : nullptr)
-	{
-		Knob->SetSimulatePhysics(false);
-		Knob->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		Knob->SetCollisionObjectType(ECC_PhysicsBody);
-		Knob->SetCollisionResponseToAllChannels(ECR_Ignore);
-	}
+	CockpitGrab::SetGrabSurface(GrabComponent, true);
 }
 
 void UCockpitJoystickComponent::PollGrabComponent()
 {
-	if (ExplicitHand.IsValid())
-	{
-		Hand = ExplicitHand;
-		return;
-	}
-	if (!GrabComponent)
-	{
-		Hand = nullptr;
-		return;
-	}
-	// Read the template's grab component via reflection (no Blueprint changes needed).
-	bool bIsHeld = false;
-	if (const FBoolProperty* HeldProperty = FindFProperty<FBoolProperty>(GrabComponent->GetClass(), TEXT("bIsHeld")))
-	{
-		bIsHeld = HeldProperty->GetPropertyValue_InContainer(GrabComponent);
-	}
-	USceneComponent* Controller = nullptr;
-	if (const FObjectPropertyBase* ControllerProperty = FindFProperty<FObjectPropertyBase>(GrabComponent->GetClass(), TEXT("MotionControllerRef")))
-	{
-		Controller = Cast<USceneComponent>(ControllerProperty->GetObjectPropertyValue_InContainer(GrabComponent));
-	}
-	Hand = (bIsHeld && Controller) ? Controller : nullptr;
+	Hand = ExplicitHand.IsValid() ? ExplicitHand.Get() : CockpitGrab::GetHoldingHand(GrabComponent);
 }
 
 FTransform UCockpitJoystickComponent::GetBaseTransform() const
