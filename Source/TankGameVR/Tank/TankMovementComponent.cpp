@@ -96,9 +96,7 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
 	for (int32 Attempt = 0; Attempt < 3 && Hit.bStartPenetrating; ++Attempt)
 	{
-		// Something is inside the hull (an enemy spawned or teleported into us): every sweep would be blocked and
-		// the tank would freeze. Shallow overlap: step out sideways. Deep overlap or no usable push-out:
-		// ignore that actor until we've driven clear of it.
+		// Stuck inside something (e.g. an enemy spawned in us). Shallow: push out. Deep: ignore it until we're out.
 		FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
 		PushOut.Z = 0.0;
 		AActor* Other = Hit.GetActor();

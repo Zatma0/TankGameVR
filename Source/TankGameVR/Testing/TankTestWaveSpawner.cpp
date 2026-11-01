@@ -56,7 +56,7 @@ void ATankTestWaveSpawner::SpawnWave()
 		const float Alpha = EnemiesPerWave > 1 ? static_cast<float>(Index) / (EnemiesPerWave - 1) : 0.5f;
 		FTransform Transform;
 		bool bFound = false;
-		// The player may be driving around the spawn area: try a few spots, skip this enemy if all are on top of them.
+		// Try a few spots away from the player, skip this one if none is free.
 		for (int32 Attempt = 0; Attempt < 12 && !bFound; ++Attempt)
 		{
 			const float Jitter = Attempt == 0 ? 4.0f : SpawnArc * 0.5f;

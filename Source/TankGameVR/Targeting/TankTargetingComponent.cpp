@@ -425,7 +425,7 @@ void UTankTargetingComponent::UpdateAim(float DeltaTime)
 		}
 	}
 
-	// The turret chases the goal at its own pace; the sight and the shot follow the real gun.
+	// Turret turns at its own speed; sight and shot follow the gun.
 	float GoalYaw = 0.0f;
 	float GoalPitch = 0.0f;
 	const FVector SightForward = Sight.GetRotation().GetForwardVector();
@@ -489,7 +489,7 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 				ManualPitch = FMath::FixedTurn(ManualPitch, 0.0f, AimRecenterSpeed * DeltaTime);
 			}
 
-			// Don't grab the turret out of the player's hands while they aim themselves.
+			// No auto lock while the player is aiming.
 			const bool bHandsOff = Time - LastManualAimTime >= AutoAcquireAfterManualDelay;
 			if (bAutoAcquire && bHandsOff && Time >= NextAutoAcquireTime)
 			{
