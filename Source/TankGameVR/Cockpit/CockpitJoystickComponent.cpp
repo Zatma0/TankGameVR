@@ -102,7 +102,7 @@ void UCockpitJoystickComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 
 void UCockpitJoystickComponent::ApplyVisualTilt()
 {
-	// Signs: +pitch tips back, +roll tips left.
-	const FQuat Tilt = FRotator(-Value.Y * MaxTiltAngle, 0.0f, -Value.X * MaxTiltAngle).Quaternion();
+	// +pitch tips back, +roll tips right.
+	const FQuat Tilt = FRotator(-Value.Y * MaxTiltAngle, 0.0f, Value.X * MaxTiltAngle).Quaternion();
 	SetRelativeRotation(RestRelativeTransform.GetRotation() * Tilt);
 }

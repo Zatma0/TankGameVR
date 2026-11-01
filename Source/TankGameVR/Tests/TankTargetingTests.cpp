@@ -416,7 +416,14 @@ bool FTankJoystickTest::RunTest(const FString& Parameters)
 	Tank->SetFallbackInputs(FVector2D(1.0, 0.0), FVector2D::ZeroVector);
 	Test.Tick(0.1f);
 	TestTrue(TEXT("thumbstick deflects the cockpit stick"), FMath::IsNearlyEqual(Stick->GetValue().X, 1.0, 0.01));
-	TestTrue(TEXT("visual tilt follows the value"), !Stick->GetRelativeRotation().Equals(FRotator::ZeroRotator, 1.0f));
+	// The top of the stick has to lean the same way it steers.
+	const FTransform Cockpit = Stick->GetAttachParent()->GetComponentTransform();
+	FVector Top = Cockpit.InverseTransformVectorNoScale(Stick->GetUpVector());
+	TestTrue(FString::Printf(TEXT("stick right -> leans right (%.2f)"), Top.Y), Top.Y > 0.2);
+	Tank->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+	Test.Tick(0.1f);
+	Top = Cockpit.InverseTransformVectorNoScale(Stick->GetUpVector());
+	TestTrue(FString::Printf(TEXT("stick forward -> leans forward (%.2f)"), Top.X), Top.X > 0.2);
 	return true;
 }
 
