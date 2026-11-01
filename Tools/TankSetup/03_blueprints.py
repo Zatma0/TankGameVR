@@ -210,6 +210,7 @@ def build_player_tank():
     cdo.set_editor_property("toggle_view_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_ToggleView"))
     cdo.set_editor_property("fire_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_Fire"))
     cdo.set_editor_property("auto_load_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_AutoLoad"))
+    cdo.set_editor_property("toggle_aim_assist_action", unreal.load_asset("/Game/TankGame/Input/IA_Tank_ToggleAimAssist"))
     compile_save(bp)
     return bp
 

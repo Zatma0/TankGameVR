@@ -30,6 +30,7 @@ aim = make_action("IA_Tank_Aim")
 toggle_view = make_action("IA_Tank_ToggleView", unreal.InputActionValueType.BOOLEAN)
 fire = make_action("IA_Tank_Fire", unreal.InputActionValueType.BOOLEAN)
 auto_load = make_action("IA_Tank_AutoLoad", unreal.InputActionValueType.BOOLEAN)
+toggle_assist = make_action("IA_Tank_ToggleAimAssist", unreal.InputActionValueType.BOOLEAN)
 # The trigger also clicks the template menu and drives the hand pose, so firing must not swallow it.
 fire.set_editor_property("consume_input", False)
 eal.save_loaded_asset(fire)
@@ -92,6 +93,10 @@ for vendor in ["OculusTouch", "ValveIndex", "PICO", "Vive"]:
 # Hands-free loading for monitor play (in VR you load by hand).
 for key in ["R", "Gamepad_FaceButton_Left"]:
     add(auto_load, key)
+
+# Aim Assist on/off without the VR menu.
+for key in ["T", "Gamepad_LeftThumbstick"]:
+    add(toggle_assist, key)
 
 apply_modifiers()
 eal.save_loaded_asset(imc)

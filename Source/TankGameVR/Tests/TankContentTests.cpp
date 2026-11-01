@@ -110,7 +110,8 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
 		const FString ActionName = Mapping.Action ? Mapping.Action->GetName() : FString();
-		if (ActionName == TEXT("IA_Tank_ToggleView") || ActionName == TEXT("IA_Tank_Fire") || ActionName == TEXT("IA_Tank_AutoLoad"))
+		if (ActionName == TEXT("IA_Tank_ToggleView") || ActionName == TEXT("IA_Tank_Fire") || ActionName == TEXT("IA_Tank_AutoLoad")
+			|| ActionName == TEXT("IA_Tank_ToggleAimAssist"))
 		{
 			ButtonKeys.FindOrAdd(ActionName).Add(Mapping.Key);
 			TestEqual(FString::Printf(TEXT("%s is a button"), *ActionName), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Boolean));
@@ -129,6 +130,8 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("trigger keys are real keys"), FKey(TEXT("OculusTouch_Right_Trigger_Click")).IsValid());
 	TestTrue(TEXT("fire does not swallow the trigger (menu laser, hand pose)"), FireAction && !FireAction->bConsumeInput);
 	TestTrue(TEXT("auto load on R"), AutoLoadKeys.Contains(EKeys::R));
+	const TSet<FKey>& AssistKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_ToggleAimAssist"));
+	TestTrue(TEXT("aim assist toggle on T and left stick click"), AssistKeys.Contains(EKeys::T) && AssistKeys.Contains(EKeys::Gamepad_LeftThumbstick));
 	// Every key the template uses for teleport/snap turn must be claimed while seated.
 	for (const FEnhancedActionKeyMapping& Mapping : TemplateContext->GetMappings())
 	{
@@ -140,6 +143,7 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		// Buttons must not take one the template already uses.
 		TestFalse(FString::Printf(TEXT("view toggle key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), ToggleViewKeys.Contains(Mapping.Key));
 		TestFalse(FString::Printf(TEXT("auto load key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), AutoLoadKeys.Contains(Mapping.Key));
+		TestFalse(FString::Printf(TEXT("aim assist key %s is free in the template (%s)"), *Mapping.Key.ToString(), *ActionName), AssistKeys.Contains(Mapping.Key));
 	}
 	TestTrue(TEXT("keyboard drive fallback"), TankKeys.Contains(EKeys::W) && TankKeys.Contains(EKeys::D));
 	TestTrue(TEXT("keyboard aim fallback"), TankKeys.Contains(EKeys::Left) && TankKeys.Contains(EKeys::Right));
@@ -193,6 +197,7 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("view toggle action assigned"), Tank->ToggleViewAction.Get());
 	TestNotNull(TEXT("fire action assigned"), Tank->FireAction.Get());
 	TestNotNull(TEXT("auto load action assigned"), Tank->AutoLoadAction.Get());
+	TestNotNull(TEXT("aim assist toggle action assigned"), Tank->ToggleAimAssistAction.Get());
 	TestTrue(TEXT("display uses the cockpit display widget"), Cast<UCockpitDisplayWidget>(Tank->GetDisplay()->GetWidget()) != nullptr);
 	for (const TCHAR* Name : { TEXT("BreechBlock"), TEXT("ReadyLamp"), TEXT("CasingStub"), TEXT("MuzzleFlash"), TEXT("MuzzleFlashLight"),
 		TEXT("ShellAGrab"), TEXT("ShellBGrab"), TEXT("ShellCGrab"), TEXT("CigaretteGrab"), TEXT("CigaretteEmber"), TEXT("CigaretteGlow") })

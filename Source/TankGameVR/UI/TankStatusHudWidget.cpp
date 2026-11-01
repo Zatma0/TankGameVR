@@ -74,7 +74,7 @@ void UTankStatusHudWidget::UpdateStatus()
 		if (Targeting)
 		{
 			const bool bAssist = Targeting->IsAimAssistEnabled();
-			LastStatus += FString::Printf(TEXT("AIM ASSIST: %s\n"), bAssist ? TEXT("ON") : TEXT("OFF"));
+			LastStatus += FString::Printf(TEXT("AIM ASSIST: %s   [T: on/off]\n"), bAssist ? TEXT("ON") : TEXT("OFF"));
 			if (const UTargetableComponent* Current = Targeting->GetCurrentTarget())
 			{
 				const float Meters = static_cast<float>(FVector::Dist(Targeting->GetAimOrigin(), Current->GetTargetLocation()) / 100.0);

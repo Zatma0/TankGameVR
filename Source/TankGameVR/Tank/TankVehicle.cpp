@@ -6,6 +6,7 @@
 #include "Weapons/TankCannonComponent.h"
 #include "Weapons/TankShellComponent.h"
 #include "Cockpit/TankSeatComponent.h"
+#include "Settings/TankSettingsSubsystem.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "UI/CockpitDisplayWidget.h"
 #include "UI/TankStatusHudWidget.h"
@@ -169,6 +170,19 @@ void ATankVehicle::OnAutoLoad(const FInputActionValue& Value)
 	Breech->AutoLoad();
 }
 
+void ATankVehicle::OnToggleAimAssist(const FInputActionValue& Value)
+{
+	// Through the saved setting, so the VR menu button and the display stay in sync.
+	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(this))
+	{
+		Settings->ToggleAimAssist();
+	}
+	else
+	{
+		Targeting->SetAimAssistEnabled(!Targeting->IsAimAssistEnabled());
+	}
+}
+
 void ATankVehicle::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (OverviewHud)
@@ -240,6 +254,10 @@ void ATankVehicle::HandleBoarded(APawn* Pawn)
 	if (AutoLoadAction)
 	{
 		EnhancedInput->BindAction(AutoLoadAction, ETriggerEvent::Started, this, &ATankVehicle::OnAutoLoad);
+	}
+	if (ToggleAimAssistAction)
+	{
+		EnhancedInput->BindAction(ToggleAimAssistAction, ETriggerEvent::Started, this, &ATankVehicle::OnToggleAimAssist);
 	}
 }
 

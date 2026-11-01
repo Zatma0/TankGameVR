@@ -53,6 +53,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> FireAction;
 
+	/** Button: Aim Assist on/off (same saved setting as the VR menu button). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> ToggleAimAssistAction;
+
 	/** Button: load a round without hands (keyboard/gamepad play). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> AutoLoadAction;
@@ -196,6 +200,7 @@ private:
 	void OnToggleView(const FInputActionValue& Value);
 	void OnFire(const FInputActionValue& Value);
 	void OnAutoLoad(const FInputActionValue& Value);
+	void OnToggleAimAssist(const FInputActionValue& Value);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> OverviewHud;

@@ -18,7 +18,7 @@ Template (`BP_XRPawn` and its grab system are used as they are).
 |---|---|---|---|
 | Drive: right/left = curve, forward/back = throttle/reverse | grip the **left (blue) stick** | left thumbstick | W A S D |
 | Aim: flick right/left = next target on that side (free aim with Aim Assist off) | grip the **right (orange) stick** | right thumbstick | arrow keys |
-| Aim Assist On/Off | VR menu (B / Menu) → **Aim Assist** | | |
+| Aim Assist On/Off | VR menu (B / Menu) → **Aim Assist** | left stick click | T |
 | Cockpit ↔ overview camera | X (Quest/PICO left), B (Index left) | gamepad Y | C |
 | Load the gun | grip a **round** in the rack (left of the seat), push it nose-first into the **breech** | gamepad X (auto) | R (auto) |
 | Fire | **trigger** (either hand) | RT | Space / F |
