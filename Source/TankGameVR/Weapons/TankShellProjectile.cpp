@@ -58,6 +58,8 @@ ATankShellProjectile::ATankShellProjectile()
 	Movement->MaxSpeed = 15000.0f;
 	Movement->ProjectileGravityScale = 0.15f;
 	Movement->bRotationFollowsVelocity = true;
+	// Launch() gives a world direction; the default would rotate it by the spawn rotation a second time.
+	Movement->bInitialVelocityInLocalSpace = false;
 	Movement->bShouldBounce = false;
 
 	TracerMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/TankGame/Materials/MI_Tank_Tracer.MI_Tank_Tracer")));
@@ -91,6 +93,7 @@ void ATankShellProjectile::Launch(const FVector& Direction, float Speed, AContro
 	InstigatorController = InInstigatorController;
 	Movement->InitialSpeed = Speed;
 	Movement->MaxSpeed = Speed;
+	Movement->bInitialVelocityInLocalSpace = false;
 	Movement->Velocity = Direction.GetSafeNormal() * Speed;
 }
 

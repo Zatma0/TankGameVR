@@ -7,12 +7,14 @@
 #include "Cockpit/CockpitCigaretteComponent.h"
 #include "Combat/TankHealthComponent.h"
 #include "Tank/TankVehicle.h"
+#include "Targeting/TankTargetingComponent.h"
 #include "Weapons/TankBreechComponent.h"
 #include "Weapons/TankCannonComponent.h"
 #include "Weapons/TankShellComponent.h"
 #include "Weapons/TankShellProjectile.h"
 #include "EngineUtils.h"
 #include "GameFramework/DamageType.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 
 using namespace TankTests;
@@ -120,6 +122,11 @@ bool FTankLoadAndFireTest::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("fires when loaded"), Gun.Tank->Fire());
 	TestEqual(TEXT("one round in flight"), Gun.CountProjectiles(), 1);
+	for (TActorIterator<ATankShellProjectile> It(Gun.Test.World); It; ++It)
+	{
+		const FVector Velocity = It->GetProjectileMovement()->Velocity.GetSafeNormal();
+		TestTrue(TEXT("round flies along the aim"), FVector::DotProduct(Velocity, Gun.Tank->GetTargeting()->GetAimDirection()) > 0.999);
+	}
 	TestFalse(TEXT("fired round is used up"), Gun.Round->IsAvailable());
 	Gun.Test.Tick(0.4f);
 	TestEqual(TEXT("hit took 25 HP"), Health->GetHealth(), 25.0f);

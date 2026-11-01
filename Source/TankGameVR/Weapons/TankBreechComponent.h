@@ -90,10 +90,10 @@ public:
 	FName LampParameter = TEXT("EmissiveStrength");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Visuals")
-	float LampOnStrength = 25.0f;
+	float LampOnStrength = 80.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Visuals")
-	float LampOffStrength = 0.3f;
+	float LampOffStrength = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Casing")
 	FName CasingComponentName = TEXT("CasingStub");
