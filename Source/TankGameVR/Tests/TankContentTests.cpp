@@ -499,6 +499,18 @@ bool FTankContentWavesTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("tank locks onto wave 2"), SecondLock);
 	TestTrue(TEXT("lock belongs to the new wave"), SecondLock && SecondLock->GetTargetDisplayName().ToString().StartsWith(TEXT("W2")));
 
+	// The player parked right where enemies would appear: nothing spawns inside or next to the tank.
+	Spawner->SpawnDistance = FVector2D(300.0, 900.0);
+	Spawner->SkipToNextWave();
+	for (TActorIterator<AActor> It(Test.World); It; ++It)
+	{
+		if (It->FindComponentByClass<UTargetableComponent>() && *It != Tank && !It->IsActorBeingDestroyed())
+		{
+			TestTrue(FString::Printf(TEXT("%s keeps its distance from the player"), *It->GetName()),
+				FVector::Dist2D(It->GetActorLocation(), Tank->GetActorLocation()) >= Spawner->MinDistanceFromPlayer);
+		}
+	}
+
 	UGameplayStatics::DeleteGameInSlot(TestSlot, 0);
 	return true;
 }

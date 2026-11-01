@@ -87,6 +87,10 @@ protected:
 private:
 	void FollowGround();
 	void DrawDebug() const;
+	void ReleaseGhostedActors(UPrimitiveComponent* Hull);
+
+	/** Things we were stuck inside; ignored until the hull is clear of them. */
+	TArray<TWeakObjectPtr<AActor>> GhostedActors;
 
 	FVector2D SmoothedInput = FVector2D::ZeroVector;
 	FVector2D LimitedInput = FVector2D::ZeroVector;

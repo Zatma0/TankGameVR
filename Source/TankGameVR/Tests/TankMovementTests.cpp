@@ -207,6 +207,24 @@ bool FTankOverlapEscapeTest::RunTest(const FString& Parameters)
 	Test.Tick(1.5f);
 	TestTrue(TEXT("tank can turn"), FMath::Abs(FRotator::NormalizeAxis(Tank->GetActorRotation().Yaw - Yaw)) > 3.0f);
 	Intruder->Destroy();
+
+	// An enemy-sized block spawned right in the middle of us: drive out of it.
+	FWorld Deep;
+	ATankVehicle* Stuck = Deep.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
+	Deep.Tick(0.1f);
+	AStaticMeshActor* Inside = Deep.SpawnBlock(FVector(0, 0, 100), FVector(5, 3, 2));
+	Deep.Tick(0.05f);
+	Stuck->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+	Deep.Tick(3.5f);
+	const float Escaped = Stuck->GetActorLocation().X;
+	TestTrue(FString::Printf(TEXT("drives out of an enemy that spawned inside it (x %.0f)"), Escaped), Escaped > 600.0);
+
+	// Once clear, the block is solid again: reversing into it stops the tank.
+	Stuck->SetFallbackInputs(FVector2D(0.0, -1.0), FVector2D::ZeroVector);
+	Deep.Tick(8.0f);
+	const float Back = Stuck->GetActorLocation().X;
+	TestTrue(FString::Printf(TEXT("solid again after escaping (x %.0f, block front at 250, hull half length 300)"), Back), Back >= 549.0);
+	Inside->Destroy();
 	return true;
 }
 

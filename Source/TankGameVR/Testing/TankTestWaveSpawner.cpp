@@ -1,4 +1,5 @@
 #include "Testing/TankTestWaveSpawner.h"
+#include "Tank/TankVehicle.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "Targeting/TargetableComponent.h"
 #include "TankGameVR.h"
@@ -39,13 +40,36 @@ void ATankTestWaveSpawner::SpawnWave()
 	++CurrentWave;
 	const FVector Origin = GetActorLocation();
 	const float BaseYaw = GetActorRotation().Yaw;
+
+	TArray<FVector> Players;
+	for (TActorIterator<ATankVehicle> It(GetWorld()); It; ++It)
+	{
+		Players.Add(It->GetActorLocation());
+	}
+	auto TooCloseToPlayer = [&](const FVector& Location)
+	{
+		return Players.ContainsByPredicate([&](const FVector& Player) { return FVector::Dist2D(Player, Location) < MinDistanceFromPlayer; });
+	};
+
 	for (int32 Index = 0; Index < EnemiesPerWave; ++Index)
 	{
 		const float Alpha = EnemiesPerWave > 1 ? static_cast<float>(Index) / (EnemiesPerWave - 1) : 0.5f;
-		const float Yaw = BaseYaw + (Alpha - 0.5f) * SpawnArc + FMath::FRandRange(-4.0f, 4.0f);
-		const float Distance = FMath::FRandRange(SpawnDistance.X, SpawnDistance.Y);
-		const FVector Direction = FRotator(0.0f, Yaw, 0.0f).Vector();
-		const FTransform Transform(FRotator(0.0f, Yaw + 180.0f, 0.0f), Origin + Direction * Distance);
+		FTransform Transform;
+		bool bFound = false;
+		// The player may be driving around the spawn area: try a few spots, skip this enemy if all are on top of them.
+		for (int32 Attempt = 0; Attempt < 12 && !bFound; ++Attempt)
+		{
+			const float Jitter = Attempt == 0 ? 4.0f : SpawnArc * 0.5f;
+			const float Yaw = BaseYaw + (Alpha - 0.5f) * SpawnArc + FMath::FRandRange(-Jitter, Jitter);
+			const float Distance = FMath::FRandRange(SpawnDistance.X, SpawnDistance.Y);
+			const FVector Direction = FRotator(0.0f, Yaw, 0.0f).Vector();
+			Transform = FTransform(FRotator(0.0f, Yaw + 180.0f, 0.0f), Origin + Direction * Distance);
+			bFound = !TooCloseToPlayer(Transform.GetLocation());
+		}
+		if (!bFound)
+		{
+			continue;
+		}
 
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;

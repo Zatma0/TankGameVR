@@ -89,17 +89,31 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	const FQuat NewRotation = FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDelta)) * CurrentRotation;
 	const FVector Delta = Forward * CurrentSpeed * Dt;
 
+	UPrimitiveComponent* Hull = Cast<UPrimitiveComponent>(Root);
+	ReleaseGhostedActors(Hull);
+
 	FHitResult Hit;
 	Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
-	if (Hit.bStartPenetrating)
+	for (int32 Attempt = 0; Attempt < 3 && Hit.bStartPenetrating; ++Attempt)
 	{
-		// Something ended up inside the hull (e.g. an enemy teleported into us): every sweep would be blocked and the
-		// tank would freeze. Step out sideways along the push-out normal, then try the move again.
+		// Something is inside the hull (an enemy spawned or teleported into us): every sweep would be blocked and
+		// the tank would freeze. Shallow overlap: step out sideways. Deep overlap or no usable push-out:
+		// ignore that actor until we've driven clear of it.
 		FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
 		PushOut.Z = 0.0;
-		if (!PushOut.IsNearlyZero())
+		AActor* Other = Hit.GetActor();
+		if (Hit.PenetrationDepth > 0.0f && Hit.PenetrationDepth < 50.0f && !PushOut.IsNearlyZero())
 		{
 			Root->MoveComponent(PushOut, CurrentRotation, false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+		}
+		else if (Hull && Other && Other != Owner)
+		{
+			Hull->IgnoreActorWhenMoving(Other, true);
+			GhostedActors.AddUnique(Other);
+		}
+		else
+		{
+			break;
 		}
 		Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
 	}
@@ -118,6 +132,38 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	if (TankDebug::IsMovementDebugEnabled(bDebugDraw))
 	{
 		DrawDebug();
+	}
+}
+
+void UTankMovementComponent::ReleaseGhostedActors(UPrimitiveComponent* Hull)
+{
+	for (int32 Index = GhostedActors.Num() - 1; Index >= 0; --Index)
+	{
+		AActor* Other = GhostedActors[Index].Get();
+		bool bStillInside = false;
+		if (Other && Hull)
+		{
+			// Bounding boxes: a bit conservative when turned, which is fine here.
+			const FBox HullBox = Hull->Bounds.GetBox();
+			TArray<UPrimitiveComponent*> Parts;
+			Other->GetComponents(Parts);
+			for (UPrimitiveComponent* Part : Parts)
+			{
+				if (Part->IsCollisionEnabled() && HullBox.Intersect(Part->Bounds.GetBox()))
+				{
+					bStillInside = true;
+					break;
+				}
+			}
+		}
+		if (!bStillInside)
+		{
+			if (Other && Hull)
+			{
+				Hull->IgnoreActorWhenMoving(Other, false);
+			}
+			GhostedActors.RemoveAt(Index);
+		}
 	}
 }
 

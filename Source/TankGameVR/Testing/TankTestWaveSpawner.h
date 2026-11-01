@@ -33,6 +33,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (Units = "Centimeters"))
 	FVector2D SpawnDistance = FVector2D(2500.0, 4500.0);
 
+	/** Never spawn an enemy closer than this to a player tank (it would end up inside it). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (Units = "Centimeters"))
+	float MinDistanceFromPlayer = 1200.0f;
+
 	/** Spawn arc width in degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Waves", meta = (ClampMin = "0.0", ClampMax = "360.0"))
 	float SpawnArc = 90.0f;
