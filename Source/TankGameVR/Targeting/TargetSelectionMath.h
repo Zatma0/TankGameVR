@@ -62,8 +62,9 @@ struct TANKGAMEVR_API FTargetSelectionTuning
 {
 	GENERATED_BODY()
 
+	/** Lock range. Anything farther is aimed at by hand, even with Aim Assist on. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (ClampMin = "100.0", Units = "Centimeters"))
-	float MaximumTargetDistance = 15000.0f;
+	float MaximumTargetDistance = 6000.0f;
 
 	/** Half-angle (deg) around the hull's forward. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (ClampMin = "1.0", ClampMax = "180.0"))

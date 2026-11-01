@@ -405,6 +405,33 @@ bool FTankJoystickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankManualBeyondRangeTest, "Tank.Targeting.ManualAimBeyondLockRange", TankTestFlags)
+bool FTankManualBeyondRangeTest::RunTest(const FString& Parameters)
+{
+	// Aim Assist on, but the only enemy is out of lock range: the stick turns the turret by hand.
+	FTargetScene Scene({ 10 }, 8000.0f);
+	Scene.Test.Tick(1.0f);
+	TestTrue(TEXT("assist is on"), Scene.Targeting->IsAimAssistEnabled());
+	TestNull(TEXT("far target is not locked"), Scene.Targeting->GetCurrentTarget());
+
+	const float YawBefore = Scene.Targeting->GetAimDirection().Rotation().Yaw;
+	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D(1.0, 0.0));
+	Scene.Test.Tick(1.0f);
+	TestTrue(FString::Printf(TEXT("stick turns the turret (%.1f -> %.1f)"), YawBefore, Scene.Targeting->GetAimDirection().Rotation().Yaw),
+		Scene.Targeting->GetAimDirection().Rotation().Yaw - YawBefore > 15.0f);
+
+	// An enemy comes into range while the player is still aiming: no lock yet.
+	AActor* Near = Scene.Test.SpawnTarget(FVector(2500, 800, 200), TEXT("Near"));
+	Scene.Test.Tick(0.5f);
+	TestNull(TEXT("no auto lock while the stick is in use"), Scene.Targeting->GetCurrentTarget());
+
+	// Hands off: it locks.
+	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D::ZeroVector);
+	Scene.Test.Tick(Scene.Targeting->AutoAcquireAfterManualDelay + 0.5f);
+	TestTrue(TEXT("locks once the stick is let go"), Scene.Current() == Near);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankTurretTraverseTest, "Tank.Targeting.TurretTraverseIsHeavy", TankTestFlags)
 bool FTankTurretTraverseTest::RunTest(const FString& Parameters)
 {

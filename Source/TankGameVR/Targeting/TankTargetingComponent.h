@@ -94,6 +94,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.05", Units = "Seconds"))
 	float AutoAcquireInterval = 0.25f;
 
+	/** While you aim by hand nothing is locked; it waits until the stick has been still this long. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.0", Units = "Seconds"))
+	float AutoAcquireAfterManualDelay = 0.75f;
+
 	/** How often all targets are re-checked. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting|Acquire", meta = (ClampMin = "0.02", Units = "Seconds"))
 	float CandidateRefreshInterval = 0.1f;
@@ -246,5 +250,6 @@ private:
 	double IneligibleSince = -1.0;
 	double NextCandidateRefreshTime = 0.0;
 	double IdleSince = -1.0;
+	double LastManualAimTime = -1000.0;
 	FString LastDecision;
 };

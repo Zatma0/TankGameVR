@@ -50,8 +50,11 @@ Code: `Source/TankGameVR/{Tank,Cockpit,Targeting,Weapons,Combat,Settings,UI,Test
 ## Target lock (Aim Assist)
 
 - One current target. Pushing the aim stick right/left picks the nearest eligible target on that side, no wrap-around.
-- Eligible = within `MaximumTargetDistance`, within `MaximumTargetAngle` of the hull's forward, and visible
-  (`MinimumTargetVisibility`, three line-of-sight rays).
+- Eligible = within the lock range `MaximumTargetDistance` (60 m), within `MaximumTargetAngle` of the hull's
+  forward, and visible (`MinimumTargetVisibility`, three line-of-sight rays).
+- Nothing lockable (e.g. enemies farther than 60 m): the right stick turns the turret by hand, just like with Aim
+  Assist off. While you aim by hand nothing gets locked; once the stick has been still for
+  `AutoAcquireAfterManualDelay` the nearest eligible target is locked.
 - No jitter: switches happen on the push edge, need the stick to return first, and repeat slowly when held
   (`TargetSwitchRepeatDelay`/`Interval`, `TargetSwitchCooldown`).
 - Destroyed or disabled targets are dropped at once; targets that leave view are dropped after

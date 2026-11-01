@@ -478,13 +478,16 @@ void UTankTargetingComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			// Idle: drift back to the front.
 			const bool bStickIdle = AimInput.IsNearlyZero(ManualAimDeadZone);
 			IdleSince = bStickIdle ? (IdleSince < 0.0 ? Time : IdleSince) : -1.0;
+			LastManualAimTime = bStickIdle ? LastManualAimTime : Time;
 			if (AimRecenterDelay > 0.0f && IdleSince >= 0.0 && Time - IdleSince >= AimRecenterDelay)
 			{
 				ManualYaw = FMath::FixedTurn(ManualYaw, 0.0f, AimRecenterSpeed * DeltaTime);
 				ManualPitch = FMath::FixedTurn(ManualPitch, 0.0f, AimRecenterSpeed * DeltaTime);
 			}
 
-			if (bAutoAcquire && Time >= NextAutoAcquireTime)
+			// Don't grab the turret out of the player's hands while they aim themselves.
+			const bool bHandsOff = Time - LastManualAimTime >= AutoAcquireAfterManualDelay;
+			if (bAutoAcquire && bHandsOff && Time >= NextAutoAcquireTime)
 			{
 				NextAutoAcquireTime = Time + AutoAcquireInterval;
 				TryAcquire(GetAimDirection(), TEXT("Acquired"));
