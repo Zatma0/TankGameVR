@@ -25,6 +25,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "EnhancedInputDeveloperSettings.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
@@ -125,9 +126,38 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	const TSet<FKey>& FireKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_Fire"));
 	const TSet<FKey>& AutoLoadKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_AutoLoad"));
 	TestTrue(TEXT("view toggle on C and gamepad Y"), ToggleViewKeys.Contains(EKeys::C) && ToggleViewKeys.Contains(EKeys::Gamepad_FaceButton_Top));
-	TestTrue(TEXT("fire on Space, RT and both Touch triggers"), FireKeys.Contains(EKeys::SpaceBar) && FireKeys.Contains(EKeys::Gamepad_RightTrigger)
-		&& FireKeys.Contains(FKey(TEXT("OculusTouch_Right_Trigger_Click"))) && FireKeys.Contains(FKey(TEXT("OculusTouch_Left_Trigger_Click"))));
+	TestTrue(TEXT("fire on Space and RT"), FireKeys.Contains(EKeys::SpaceBar) && FireKeys.Contains(EKeys::Gamepad_RightTrigger));
 	TestTrue(TEXT("trigger keys are real keys"), FKey(TEXT("OculusTouch_Right_Trigger_Click")).IsValid());
+
+	// VR triggers sit in their own context at the template's priority, so they don't outrank the menu/hand triggers.
+	const UInputMappingContext* TriggerContext = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/TankGame/Input/IMC_TankTrigger.IMC_TankTrigger"));
+	if (TestNotNull(TEXT("IMC_TankTrigger"), TriggerContext))
+	{
+		TSet<FKey> TriggerKeys;
+		for (const FEnhancedActionKeyMapping& Mapping : TriggerContext->GetMappings())
+		{
+			TestTrue(TEXT("trigger context only fires"), Mapping.Action && Mapping.Action->GetName() == TEXT("IA_Tank_Fire"));
+			TriggerKeys.Add(Mapping.Key);
+		}
+		TestTrue(TEXT("fire on both Touch triggers"), TriggerKeys.Contains(FKey(TEXT("OculusTouch_Right_Trigger_Click"))) && TriggerKeys.Contains(FKey(TEXT("OculusTouch_Left_Trigger_Click"))));
+	}
+
+	// OpenXR only binds keys from the default mapping contexts; anything missing there never reaches the game in VR.
+	const UEnhancedInputDeveloperSettings* InputSettings = GetDefault<UEnhancedInputDeveloperSettings>();
+	bool bTankListed = false;
+	bool bTriggerListed = false;
+	for (const FDefaultContextSetting& Setting : InputSettings->DefaultMappingContexts)
+	{
+		const FString Path = Setting.InputMappingContext.ToSoftObjectPath().ToString();
+		if (Path.EndsWith(TEXT("IMC_Tank.IMC_Tank")))
+		{
+			bTankListed = true;
+			TestFalse(TEXT("IMC_Tank is only added once seated"), Setting.bAddImmediately);
+		}
+		bTriggerListed |= Path.EndsWith(TEXT("IMC_TankTrigger.IMC_TankTrigger"));
+	}
+	TestTrue(TEXT("IMC_Tank is visible to OpenXR"), bTankListed);
+	TestTrue(TEXT("IMC_TankTrigger is visible to OpenXR"), bTriggerListed);
 	TestTrue(TEXT("fire does not swallow the trigger (menu laser, hand pose)"), FireAction && !FireAction->bConsumeInput);
 	TestTrue(TEXT("auto load on R"), AutoLoadKeys.Contains(EKeys::R));
 	const TSet<FKey>& AssistKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_ToggleAimAssist"));

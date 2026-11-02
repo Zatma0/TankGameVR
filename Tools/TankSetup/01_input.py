@@ -37,15 +37,19 @@ eal.save_loaded_asset(fire)
 
 imc = get_or_create("IMC_Tank", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
 imc.unmap_all()
+# VR triggers live in their own context at the template's priority. OpenXR ranks action sets, so a trigger in
+# IMC_Tank (priority 10) would take the trigger away from the menu laser and hand poses while seated.
+trigger_imc = get_or_create("IMC_TankTrigger", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
+trigger_imc.unmap_all()
 
 
 MODIFIERS = {}
 
 
-def add(action, key, swizzle=False, negate=False):
+def add(action, key, swizzle=False, negate=False, context=None):
     input_key = unreal.Key()
     input_key.set_editor_property("key_name", key)
-    imc.map_key(action, input_key)
+    (context or imc).map_key(action, input_key)
     MODIFIERS[(action.get_name(), key)] = (swizzle, negate)
 
 
@@ -88,7 +92,7 @@ for key in ["SpaceBar", "F", "Gamepad_RightTrigger"]:
     add(fire, key)
 for vendor in ["OculusTouch", "ValveIndex", "PICO", "Vive"]:
     for side in ["Left", "Right"]:
-        add(fire, f"{vendor}_{side}_Trigger_Click")
+        add(fire, f"{vendor}_{side}_Trigger_Click", context=trigger_imc)
 
 # Hands-free loading for monitor play (in VR you load by hand).
 for key in ["R", "Gamepad_FaceButton_Left"]:
@@ -100,9 +104,10 @@ for key in ["T", "Gamepad_LeftThumbstick"]:
 
 apply_modifiers()
 eal.save_loaded_asset(imc)
+eal.save_loaded_asset(trigger_imc)
 
 summary = {}
-for mapping in imc.get_editor_property("default_key_mappings").get_editor_property("mappings"):
+for mapping in [m for c in (imc, trigger_imc) for m in c.get_editor_property("default_key_mappings").get_editor_property("mappings")]:
     action = mapping.get_editor_property("action").get_name()
     key = str(mapping.get_editor_property("key").get_editor_property("key_name"))
     mods = [m.get_class().get_name().replace("InputModifier", "") for m in mapping.get_editor_property("modifiers")]
