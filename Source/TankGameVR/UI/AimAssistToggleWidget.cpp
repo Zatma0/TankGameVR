@@ -27,6 +27,13 @@ bool UAimAssistToggleWidget::Initialize()
 	return bResult;
 }
 
+// Also runs in the designer, so the button shows its text there.
+void UAimAssistToggleWidget::NativePreConstruct()
+{
+	Super::NativePreConstruct();
+	RefreshLabel();
+}
+
 void UAimAssistToggleWidget::NativeConstruct()
 {
 	Super::NativeConstruct();

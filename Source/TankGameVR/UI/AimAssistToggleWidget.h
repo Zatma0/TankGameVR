@@ -41,6 +41,7 @@ public:
 	virtual bool Initialize() override;
 
 protected:
+	virtual void NativePreConstruct() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
