@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CockpitDisplayWidget.generated.h"
 
+class ATankVehicle;
 class UBorder;
 class UCanvasPanel;
 class UTankBreechComponent;
@@ -55,6 +56,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Display")
 	void SetBreech(UTankBreechComponent* InBreech);
 
+	/** Hull, ammo, smoke, fires and the arena lines. */
+	UFUNCTION(BlueprintCallable, Category = "Display")
+	void SetTank(ATankVehicle* InTank);
+
+	UFUNCTION(BlueprintPure, Category = "Display")
+	FString GetHullString() const { return LastHullLine; }
+
+	UFUNCTION(BlueprintPure, Category = "Display")
+	FString GetWarningString() const { return LastWarning; }
+
+	UFUNCTION(BlueprintPure, Category = "Display")
+	FString GetAmmoString() const { return LastAmmoLine; }
+
+	UFUNCTION(BlueprintPure, Category = "Display")
+	FString GetArenaString() const { return LastArenaLine; }
+
 	UFUNCTION(BlueprintPure, Category = "Display")
 	FString GetGunString() const { return LastGunLine; }
 
@@ -91,7 +108,24 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> GunText;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> HullText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> AmmoText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ArenaText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> WarningText;
+
+	/** Red frame that flashes on a hit. */
+	UPROPERTY(BlueprintReadOnly, Category = "Display", meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> HitFrame;
+
 private:
+	void UpdateTankLines();
 	void BuildDefaultLayout();
 	UBorder* MakeRing(const FLinearColor& Color, float Thickness, bool bCircle);
 	UTextBlock* MakeText(int32 Size);
@@ -105,6 +139,11 @@ private:
 
 	TWeakObjectPtr<UTankTargetingComponent> Targeting;
 	TWeakObjectPtr<UTankBreechComponent> Breech;
+	TWeakObjectPtr<ATankVehicle> Tank;
+	FString LastHullLine;
+	FString LastWarning;
+	FString LastAmmoLine;
+	FString LastArenaLine;
 	FVector2D CrosshairUV = FVector2D(0.5, 0.5);
 	FString LastGunLine;
 	FString LastStatus;

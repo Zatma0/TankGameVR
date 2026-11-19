@@ -10,6 +10,11 @@ class UCameraComponent;
 class USpringArmComponent;
 class UUserWidget;
 class UCockpitCigaretteComponent;
+class UCockpitExtinguisherComponent;
+class UCockpitFireComponent;
+class UCockpitSmokeLauncherComponent;
+class UTankDamageReactionComponent;
+class UTankHealthComponent;
 class UCockpitJoystickComponent;
 class UInputAction;
 class UTankBreechComponent;
@@ -60,6 +65,25 @@ public:
 	/** Button: load a round without hands (keyboard/gamepad play). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> AutoLoadAction;
+
+	/** Button: load an HE round without hands. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> LoadHEAction;
+
+	/** Button: fire the smoke grenades (the dashboard switch does the same in VR). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> SmokeAction;
+
+	/** Button: hands-free extinguisher. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> ExtinguishAction;
+
+	/** VR triggers per hand: a hand holding the extinguisher sprays, otherwise the trigger fires the gun. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> TriggerLeftAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> TriggerRightAction;
 
 	/** Above the template's IMC_Default (0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
@@ -114,6 +138,28 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
 	UCockpitCigaretteComponent* GetCigarette() const { return Cigarette; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	UCockpitExtinguisherComponent* GetExtinguisher() const { return Extinguisher; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	UCockpitSmokeLauncherComponent* GetSmokeLauncher() const { return SmokeLauncher; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	TArray<UCockpitFireComponent*> GetFireSpots() const;
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
+	UTankHealthComponent* GetHealth() const { return Health; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
+	UTankDamageReactionComponent* GetDamageReaction() const { return DamageReaction; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
+	bool IsDestroyed() const;
+
+	/** A VR trigger was pressed or released. */
+	UFUNCTION(BlueprintCallable, Category = "Tank|Input")
+	void HandleTrigger(bool bLeftHand, bool bPressed);
 
 	UFUNCTION(BlueprintCallable, Category = "Tank|Weapons")
 	bool Fire();
@@ -183,8 +229,33 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
 	TObjectPtr<UTankShellComponent> ShellC;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Weapons")
+	TObjectPtr<UTankShellComponent> ShellD;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
 	TObjectPtr<UCockpitCigaretteComponent> Cigarette;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitExtinguisherComponent> Extinguisher;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitSmokeLauncherComponent> SmokeLauncher;
+
+	/** Places that can catch fire when hit. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitFireComponent> FireSpotA;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitFireComponent> FireSpotB;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitFireComponent> FireSpotC;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Combat")
+	TObjectPtr<UTankHealthComponent> Health;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Combat")
+	TObjectPtr<UTankDamageReactionComponent> DamageReaction;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
 	TObjectPtr<USpringArmComponent> OverviewArm;
@@ -201,6 +272,13 @@ private:
 	void OnFire(const FInputActionValue& Value);
 	void OnAutoLoad(const FInputActionValue& Value);
 	void OnToggleAimAssist(const FInputActionValue& Value);
+	void OnLoadHE(const FInputActionValue& Value);
+	void OnSmoke(const FInputActionValue& Value);
+	void OnExtinguish(const FInputActionValue& Value);
+	void OnTriggerLeftPressed(const FInputActionValue& Value) { HandleTrigger(true, true); }
+	void OnTriggerLeftReleased(const FInputActionValue& Value) { HandleTrigger(true, false); }
+	void OnTriggerRightPressed(const FInputActionValue& Value) { HandleTrigger(false, true); }
+	void OnTriggerRightReleased(const FInputActionValue& Value) { HandleTrigger(false, false); }
 
 	UPROPERTY(Transient)
 	TObjectPtr<UUserWidget> OverviewHud;

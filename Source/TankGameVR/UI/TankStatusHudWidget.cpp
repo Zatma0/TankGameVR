@@ -5,6 +5,8 @@
 #include "Targeting/TargetRegistrySubsystem.h"
 #include "Targeting/TargetableComponent.h"
 #include "Weapons/TankBreechComponent.h"
+#include "Combat/TankHealthComponent.h"
+#include "Game/TankArenaDirector.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -94,7 +96,20 @@ void UTankStatusHudWidget::UpdateStatus()
 		LastStatus += FString::Printf(TEXT("TARGETS IN AREA: %d\n"), TargetCount);
 		if (const UTankBreechComponent* Breech = Tank_->GetBreech())
 		{
-			LastStatus += FString::Printf(TEXT("GUN: %s   [R: load, Space: fire]"), *Breech->GetStatusText());
+			LastStatus += FString::Printf(TEXT("GUN: %s   [R: AP, H: HE, Space: fire]\n"), *Breech->GetStatusText());
+		}
+		if (const UTankHealthComponent* Health = Tank_->GetHealth())
+		{
+			LastStatus += FString::Printf(TEXT("HULL: %d%%   [V: smoke, G: extinguisher]\n"), FMath::RoundToInt(Health->GetHealthFraction() * 100.0f));
+		}
+		if (const ATankArenaDirector* Director = ATankArenaDirector::GetDirector(Tank_))
+		{
+			LastStatus += Director->GetStatusLine();
+			const FString Message = Director->GetMessage();
+			if (!Message.IsEmpty())
+			{
+				LastStatus += TEXT("   ") + Message;
+			}
 		}
 	}
 
