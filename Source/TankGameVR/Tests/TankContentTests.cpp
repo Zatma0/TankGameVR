@@ -111,8 +111,7 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	for (const FEnhancedActionKeyMapping& Mapping : TankContext->GetMappings())
 	{
 		const FString ActionName = Mapping.Action ? Mapping.Action->GetName() : FString();
-		if (ActionName == TEXT("IA_Tank_ToggleView") || ActionName == TEXT("IA_Tank_Fire") || ActionName == TEXT("IA_Tank_AutoLoad")
-			|| ActionName == TEXT("IA_Tank_ToggleAimAssist"))
+		if (Mapping.Action && Mapping.Action->ValueType == EInputActionValueType::Boolean)
 		{
 			ButtonKeys.FindOrAdd(ActionName).Add(Mapping.Key);
 			TestEqual(FString::Printf(TEXT("%s is a button"), *ActionName), static_cast<int32>(Mapping.Action->ValueType), static_cast<int32>(EInputActionValueType::Boolean));
@@ -136,10 +135,14 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 		TSet<FKey> TriggerKeys;
 		for (const FEnhancedActionKeyMapping& Mapping : TriggerContext->GetMappings())
 		{
-			TestTrue(TEXT("trigger context only fires"), Mapping.Action && Mapping.Action->GetName() == TEXT("IA_Tank_Fire"));
+			// One action per hand, so the hand holding the extinguisher can spray instead of firing.
+			const FString Name = Mapping.Action ? Mapping.Action->GetName() : FString();
+			const bool bLeft = Mapping.Key.ToString().Contains(TEXT("Left"));
+			TestEqual(FString::Printf(TEXT("%s goes to the trigger of its hand"), *Mapping.Key.ToString()), Name, FString(bLeft ? TEXT("IA_Tank_TriggerLeft") : TEXT("IA_Tank_TriggerRight")));
+			TestTrue(FString::Printf(TEXT("%s does not swallow the trigger"), *Name), Mapping.Action && !Mapping.Action->bConsumeInput);
 			TriggerKeys.Add(Mapping.Key);
 		}
-		TestTrue(TEXT("fire on both Touch triggers"), TriggerKeys.Contains(FKey(TEXT("OculusTouch_Right_Trigger_Click"))) && TriggerKeys.Contains(FKey(TEXT("OculusTouch_Left_Trigger_Click"))));
+		TestTrue(TEXT("both Touch triggers mapped"), TriggerKeys.Contains(FKey(TEXT("OculusTouch_Right_Trigger_Click"))) && TriggerKeys.Contains(FKey(TEXT("OculusTouch_Left_Trigger_Click"))));
 	}
 
 	// OpenXR only binds keys from the default mapping contexts; anything missing there never reaches the game in VR.
@@ -160,6 +163,9 @@ bool FTankContentInputTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("IMC_TankTrigger is visible to OpenXR"), bTriggerListed);
 	TestTrue(TEXT("fire does not swallow the trigger (menu laser, hand pose)"), FireAction && !FireAction->bConsumeInput);
 	TestTrue(TEXT("auto load on R"), AutoLoadKeys.Contains(EKeys::R));
+	TestTrue(TEXT("HE load on H"), ButtonKeys.FindOrAdd(TEXT("IA_Tank_LoadHE")).Contains(EKeys::H));
+	TestTrue(TEXT("smoke on V"), ButtonKeys.FindOrAdd(TEXT("IA_Tank_Smoke")).Contains(EKeys::V));
+	TestTrue(TEXT("extinguisher on G"), ButtonKeys.FindOrAdd(TEXT("IA_Tank_Extinguish")).Contains(EKeys::G));
 	const TSet<FKey>& AssistKeys = ButtonKeys.FindOrAdd(TEXT("IA_Tank_ToggleAimAssist"));
 	TestTrue(TEXT("aim assist toggle on T and left stick click"), AssistKeys.Contains(EKeys::T) && AssistKeys.Contains(EKeys::Gamepad_LeftThumbstick));
 	// Every key the template uses for teleport/snap turn must be claimed while seated.
@@ -228,9 +234,15 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("fire action assigned"), Tank->FireAction.Get());
 	TestNotNull(TEXT("auto load action assigned"), Tank->AutoLoadAction.Get());
 	TestNotNull(TEXT("aim assist toggle action assigned"), Tank->ToggleAimAssistAction.Get());
+	TestNotNull(TEXT("HE load action assigned"), Tank->LoadHEAction.Get());
+	TestNotNull(TEXT("smoke action assigned"), Tank->SmokeAction.Get());
+	TestNotNull(TEXT("extinguish action assigned"), Tank->ExtinguishAction.Get());
+	TestNotNull(TEXT("left trigger action assigned"), Tank->TriggerLeftAction.Get());
+	TestNotNull(TEXT("right trigger action assigned"), Tank->TriggerRightAction.Get());
 	TestTrue(TEXT("display uses the cockpit display widget"), Cast<UCockpitDisplayWidget>(Tank->GetDisplay()->GetWidget()) != nullptr);
 	for (const TCHAR* Name : { TEXT("BreechBlock"), TEXT("ReadyLamp"), TEXT("CasingStub"), TEXT("MuzzleFlash"), TEXT("MuzzleFlashLight"),
-		TEXT("ShellAGrab"), TEXT("ShellBGrab"), TEXT("ShellCGrab"), TEXT("CigaretteGrab"), TEXT("CigaretteEmber"), TEXT("CigaretteGlow") })
+		TEXT("ShellAGrab"), TEXT("ShellBGrab"), TEXT("ShellCGrab"), TEXT("ShellDGrab"), TEXT("CigaretteGrab"), TEXT("CigaretteEmber"), TEXT("CigaretteGlow"),
+		TEXT("ExtinguisherGrab"), TEXT("SmokeCoverHinge"), TEXT("SmokeCoverGrab"), TEXT("SmokeButton"), TEXT("SmokeLamp"), TEXT("CockpitLight") })
 	{
 		TestNotNull(FString::Printf(TEXT("%s exists"), Name), FindComponentByName(Tank, Name));
 	}
@@ -238,7 +250,8 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("muzzle flash hidden until a shot"), Flash && !Flash->IsVisible());
 
 	// Everything the VR hand can pick up.
-	const TArray<FString> GrabSurfaces = { TEXT("DriveKnob"), TEXT("AimKnob"), TEXT("ShellACase"), TEXT("ShellBCase"), TEXT("ShellCCase"), TEXT("CigarettePaper") };
+	const TArray<FString> GrabSurfaces = { TEXT("DriveKnob"), TEXT("AimKnob"), TEXT("ShellACase"), TEXT("ShellBCase"), TEXT("ShellCCase"), TEXT("ShellDCase"), TEXT("CigarettePaper"),
+		TEXT("ExtinguisherBottle"), TEXT("SmokeCover") };
 	for (const FString& KnobString : GrabSurfaces)
 	{
 		const TCHAR* KnobName = *KnobString;
@@ -331,8 +344,8 @@ bool FTankContentGrabShellTest::RunTest(const FString& Parameters)
 
 	UTankShellComponent* Round = Tank->GetShells().Last();
 	UTankBreechComponent* Breech = Tank->GetBreech();
-	USceneComponent* Grab = FindComponentByName(Tank, TEXT("ShellCGrab"));
-	if (!TestNotNull(TEXT("ShellCGrab"), Grab))
+	USceneComponent* Grab = FindComponentByName(Tank, TEXT("ShellDGrab"));
+	if (!TestNotNull(TEXT("ShellDGrab"), Grab))
 	{
 		return false;
 	}
