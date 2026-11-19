@@ -1,4 +1,5 @@
-"""Tank input: IA_Tank_Drive / IA_Tank_Aim (Axis2D), IA_Tank_ToggleView / IA_Tank_Fire / IA_Tank_AutoLoad (buttons) and IMC_Tank.
+"""Tank input: IA_Tank_Drive / IA_Tank_Aim (Axis2D), buttons (view, fire, load AP/HE, smoke, extinguisher, per-hand VR
+triggers), IMC_Tank and IMC_TankTrigger.
 
 IMC_Tank is added above the VR template's IMC_Default while seated. It maps the *same* thumbstick axis keys the
 template uses for teleport (right stick Y) and snap turn (left stick X), so those keys drive the tank instead.
@@ -31,15 +32,23 @@ toggle_view = make_action("IA_Tank_ToggleView", unreal.InputActionValueType.BOOL
 fire = make_action("IA_Tank_Fire", unreal.InputActionValueType.BOOLEAN)
 auto_load = make_action("IA_Tank_AutoLoad", unreal.InputActionValueType.BOOLEAN)
 toggle_assist = make_action("IA_Tank_ToggleAimAssist", unreal.InputActionValueType.BOOLEAN)
+load_he = make_action("IA_Tank_LoadHE", unreal.InputActionValueType.BOOLEAN)
+smoke = make_action("IA_Tank_Smoke", unreal.InputActionValueType.BOOLEAN)
+extinguish = make_action("IA_Tank_Extinguish", unreal.InputActionValueType.BOOLEAN)
+trigger_left = make_action("IA_Tank_TriggerLeft", unreal.InputActionValueType.BOOLEAN)
+trigger_right = make_action("IA_Tank_TriggerRight", unreal.InputActionValueType.BOOLEAN)
 # The trigger also clicks the template menu and drives the hand pose, so firing must not swallow it.
-fire.set_editor_property("consume_input", False)
-eal.save_loaded_asset(fire)
+for action in (fire, trigger_left, trigger_right):
+    action.set_editor_property("consume_input", False)
+    eal.save_loaded_asset(action)
 
 imc = get_or_create("IMC_Tank", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
+imc.modify()
 imc.unmap_all()
 # VR triggers live in their own context at the template's priority. OpenXR ranks action sets, so a trigger in
 # IMC_Tank (priority 10) would take the trigger away from the menu laser and hand poses while seated.
 trigger_imc = get_or_create("IMC_TankTrigger", unreal.InputMappingContext, unreal.InputMappingContext_Factory())
+trigger_imc.modify()
 trigger_imc.unmap_all()
 
 
@@ -87,24 +96,33 @@ add(aim, "Down", swizzle=True, negate=True)
 for key in ["C", "Gamepad_FaceButton_Top", "OculusTouch_Left_X_Click", "PICO_Left_X_Click", "ValveIndex_Left_B_Click"]:
     add(toggle_view, key)
 
-# Main gun: either trigger in VR, Space/F on the keyboard, RT on a gamepad.
+# Main gun: Space/F on the keyboard, RT on a gamepad. In VR each trigger has its own action, so the hand holding
+# the extinguisher sprays instead of firing.
 for key in ["SpaceBar", "F", "Gamepad_RightTrigger"]:
     add(fire, key)
 for vendor in ["OculusTouch", "ValveIndex", "PICO", "Vive"]:
-    for side in ["Left", "Right"]:
-        add(fire, f"{vendor}_{side}_Trigger_Click", context=trigger_imc)
+    add(trigger_left, f"{vendor}_Left_Trigger_Click", context=trigger_imc)
+    add(trigger_right, f"{vendor}_Right_Trigger_Click", context=trigger_imc)
 
 # Hands-free loading for monitor play (in VR you load by hand).
 for key in ["R", "Gamepad_FaceButton_Left"]:
     add(auto_load, key)
+
+# HE round, smoke and extinguisher without hands (VR uses the rack, the dashboard switch and the bottle).
+for key in ["H", "Gamepad_DPad_Left"]:
+    add(load_he, key)
+for key in ["V", "Gamepad_DPad_Up"]:
+    add(smoke, key)
+for key in ["G", "Gamepad_DPad_Down"]:
+    add(extinguish, key)
 
 # Aim Assist on/off without the VR menu.
 for key in ["T", "Gamepad_LeftThumbstick"]:
     add(toggle_assist, key)
 
 apply_modifiers()
-eal.save_loaded_asset(imc)
-eal.save_loaded_asset(trigger_imc)
+eal.save_loaded_asset(imc, False)
+eal.save_loaded_asset(trigger_imc, False)
 
 summary = {}
 for mapping in [m for c in (imc, trigger_imc) for m in c.get_editor_property("default_key_mappings").get_editor_property("mappings")]:
