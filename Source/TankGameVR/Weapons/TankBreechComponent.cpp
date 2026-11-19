@@ -101,7 +101,7 @@ FString UTankBreechComponent::GetStatusText() const
 	case ETankBreechState::Closing:
 		return TEXT("LOADING...");
 	case ETankBreechState::Loaded:
-		return TEXT("UP - READY TO FIRE");
+		return LoadedType == ETankRoundType::HE ? TEXT("UP - HE READY") : TEXT("UP - AP READY");
 	case ETankBreechState::Recoil:
 		return TEXT("SHOT OUT");
 	default:
@@ -132,6 +132,27 @@ bool UTankBreechComponent::Fire()
 	return true;
 }
 
+int32 UTankBreechComponent::CountAvailable(ETankRoundType Type) const
+{
+	int32 Count = 0;
+	for (const UTankShellComponent* Round : Shells)
+	{
+		Count += (Round && Round->RoundType == Type && Round->IsAvailable() && Round != Shell.Get()) ? 1 : 0;
+	}
+	return Count;
+}
+
+bool UTankBreechComponent::StartAutoLoad(UTankShellComponent* Round)
+{
+	Round->SetLocked(true);
+	AutoStartInBreech = Round->GetComponentTransform().GetRelativeTransform(GetComponentTransform());
+	Round->SetRail(this, RailMinFor(Round), RailMaxFor(Round));
+	Shell = Round;
+	LoadedType = Round->RoundType;
+	SetState(ETankBreechState::AutoLoading);
+	return true;
+}
+
 bool UTankBreechComponent::AutoLoad()
 {
 	if (State != ETankBreechState::Open)
@@ -142,12 +163,23 @@ bool UTankBreechComponent::AutoLoad()
 	{
 		if (Round && Round->IsAtHome())
 		{
-			Round->SetLocked(true);
-			AutoStartInBreech = Round->GetComponentTransform().GetRelativeTransform(GetComponentTransform());
-			Round->SetRail(this, RailMinFor(Round), RailMaxFor(Round));
-			Shell = Round;
-			SetState(ETankBreechState::AutoLoading);
-			return true;
+			return StartAutoLoad(Round);
+		}
+	}
+	return false;
+}
+
+bool UTankBreechComponent::AutoLoadType(ETankRoundType Type)
+{
+	if (State != ETankBreechState::Open)
+	{
+		return false;
+	}
+	for (UTankShellComponent* Round : Shells)
+	{
+		if (Round && Round->RoundType == Type && Round->IsAtHome())
+		{
+			return StartAutoLoad(Round);
 		}
 	}
 	return false;
@@ -170,6 +202,7 @@ void UTankBreechComponent::TryCapture()
 		}
 		Round->SetRail(this, RailMinFor(Round), RailMaxFor(Round));
 		Shell = Round;
+		LoadedType = Round->RoundType;
 		SetState(ETankBreechState::Ramming);
 		PlaySound(CaptureSound, 0.5f, 1.0f);
 		Click(Round->GetHand(), 0.4f);

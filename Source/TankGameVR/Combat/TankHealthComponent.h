@@ -4,9 +4,10 @@
 #include "Components/ActorComponent.h"
 #include "TankHealthComponent.generated.h"
 
+class UDamageType;
 class UTankHealthComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTankHealthChanged, UTankHealthComponent*, HealthComponent, float, Damage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnTankHealthChanged, UTankHealthComponent*, HealthComponent, float, Damage, const UDamageType*, DamageType);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTankDied, UTankHealthComponent*, HealthComponent, AActor*, Killer);
 
 /**
@@ -23,6 +24,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "1.0"))
 	float MaxHealth = 50.0f;
+
+	/** Armour: damage of these types is scaled (e.g. HE x0.5 on a tank). Types not listed do full damage. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	TMap<TSubclassOf<UDamageType>, float> DamageMultipliers;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	bool bDestroyOwnerOnDeath = true;
@@ -41,7 +46,21 @@ public:
 	float GetHealth() const { return Health; }
 
 	UFUNCTION(BlueprintPure, Category = "Health")
+	float GetHealthFraction() const { return MaxHealth > 0.0f ? Health / MaxHealth : 0.0f; }
+
+	UFUNCTION(BlueprintPure, Category = "Health")
 	bool IsDead() const { return bDead; }
+
+	UFUNCTION(BlueprintPure, Category = "Health")
+	float GetDamageMultiplier(TSubclassOf<UDamageType> DamageType) const;
+
+	/** Adds HP (not above MaxHealth, not on a dead owner). Returns what was added. */
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	float Heal(float Amount);
+
+	/** Sets MaxHealth and fills up. */
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void SetMaxHealth(float NewMaxHealth);
 
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void ResetHealth();
@@ -55,4 +74,5 @@ protected:
 private:
 	float Health = 0.0f;
 	bool bDead = false;
+	bool bStarted = false;
 };

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Combat/TankDamageTypes.h"
 #include "TankBreechComponent.generated.h"
 
 class UHapticFeedbackEffect_Base;
@@ -148,6 +149,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Breech")
 	FString GetStatusText() const;
 
+	/** Type of the round in the breech (or the last one loaded). */
+	UFUNCTION(BlueprintPure, Category = "Breech")
+	ETankRoundType GetLoadedRoundType() const { return LoadedType; }
+
 	/** Spends the loaded round. Returns false if not loaded. */
 	UFUNCTION(BlueprintCallable, Category = "Breech")
 	bool Fire();
@@ -156,6 +161,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Breech")
 	bool AutoLoad();
 
+	/** Same, but only takes a round of this type. */
+	UFUNCTION(BlueprintCallable, Category = "Breech")
+	bool AutoLoadType(ETankRoundType Type);
+
+	/** Rack rounds of this type ready to use. */
+	UFUNCTION(BlueprintPure, Category = "Breech")
+	int32 CountAvailable(ETankRoundType Type) const;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
@@ -163,6 +176,7 @@ protected:
 
 private:
 	void SetState(ETankBreechState NewState);
+	bool StartAutoLoad(UTankShellComponent* Round);
 	void TryCapture();
 	void UpdateRamming();
 	void UpdateAutoLoading();
@@ -190,6 +204,7 @@ private:
 
 	TWeakObjectPtr<UTankShellComponent> Shell;
 	ETankBreechState State = ETankBreechState::Open;
+	ETankRoundType LoadedType = ETankRoundType::AP;
 	FTransform RestRelativeTransform;
 	FTransform AutoStartInBreech;
 	FVector BlockClosedLocation = FVector::ZeroVector;

@@ -3,6 +3,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "EngineUtils.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -81,6 +82,13 @@ void ATankShellProjectile::BeginPlay()
 			Collision->IgnoreActorWhenMoving(Rider, true);
 		}
 	}
+	if (FriendlyClass)
+	{
+		for (TActorIterator<AActor> It(GetWorld(), FriendlyClass); It; ++It)
+		{
+			Collision->IgnoreActorWhenMoving(*It, true);
+		}
+	}
 	if (UMaterialInterface* Material = TracerMaterial.LoadSynchronous())
 	{
 		Tracer->SetMaterial(0, Material);
@@ -97,9 +105,21 @@ void ATankShellProjectile::Launch(const FVector& Direction, float Speed, AContro
 	Movement->Velocity = Direction.GetSafeNormal() * Speed;
 }
 
+void ATankShellProjectile::SetTracerScale(float Scale)
+{
+	Tracer->SetRelativeLocation(FVector(-25.0 * Scale, 0.0, 0.0));
+	Tracer->SetRelativeScale3D(FVector(0.6 * Scale, 0.07 * Scale, 0.07 * Scale));
+	Light->SetIntensity(40.0f * Scale);
+}
+
 void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	if (bHit)
+	{
+		return;
+	}
+	// A friendly vehicle driving into the round in flight (its own sweep reports the hit) doesn't count.
+	if (OtherActor && (OtherActor == GetOwner() || (FriendlyClass && OtherActor->IsA(FriendlyClass)) || (GetOwner() && OtherActor->IsAttachedTo(GetOwner()))))
 	{
 		return;
 	}
@@ -108,6 +128,18 @@ void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* 
 	if (OtherActor && OtherActor != GetOwner())
 	{
 		UGameplayStatics::ApplyPointDamage(OtherActor, Damage, Direction, Hit, InstigatorController.Get(), this, DamageType);
+	}
+	if (SplashRadius > 0.0f && SplashDamage > 0.0f)
+	{
+		// The direct hit already counted, so the blast skips that actor.
+		TArray<AActor*> Ignore = { this, OtherActor };
+		if (AActor* Shooter = GetOwner())
+		{
+			Ignore.Add(Shooter);
+			Shooter->GetAttachedActors(Ignore, false, true);
+		}
+		UGameplayStatics::ApplyRadialDamageWithFalloff(this, SplashDamage, 0.0f, Hit.ImpactPoint + Hit.ImpactNormal * 20.0,
+			SplashRadius * 0.3f, SplashRadius, 1.0f, DamageType, Ignore, this, InstigatorController.Get(), ECC_Visibility);
 	}
 	if (USoundBase* Sound = ImpactSound.LoadSynchronous())
 	{
@@ -122,8 +154,9 @@ void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* 
 	SetActorLocation(Hit.ImpactPoint);
 	Tracer->SetHiddenInGame(true);
 	ImpactFlash->SetHiddenInGame(false);
-	Light->SetIntensity(400.0f);
-	Light->SetAttenuationRadius(1500.0f);
+	FlashPeak = SplashRadius > 0.0f ? 900.0f : 400.0f;
+	Light->SetIntensity(FlashPeak);
+	Light->SetAttenuationRadius(SplashRadius > 0.0f ? 2500.0f : 1500.0f);
 	FlashTime = 0.0f;
 }
 
@@ -139,7 +172,7 @@ void ATankShellProjectile::Tick(float DeltaSeconds)
 	// Grows fast, then shrinks away.
 	const float Size = ImpactFlashSize * FMath::Sin(T * PI) * (1.0f - 0.4f * T);
 	ImpactFlash->SetWorldScale3D(FVector(FMath::Max(Size, 1.0f) / 100.0f));
-	Light->SetIntensity(400.0f * (1.0f - T));
+	Light->SetIntensity(FlashPeak * (1.0f - T));
 	if (T >= 1.0f)
 	{
 		Destroy();

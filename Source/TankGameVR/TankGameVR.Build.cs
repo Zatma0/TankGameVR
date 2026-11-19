@@ -15,7 +15,8 @@ public class TankGameVR : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"UMG",
-			"HeadMountedDisplay"
+			"HeadMountedDisplay",
+			"NavigationSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

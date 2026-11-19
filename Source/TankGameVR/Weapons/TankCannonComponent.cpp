@@ -1,6 +1,7 @@
 #include "Weapons/TankCannonComponent.h"
 #include "Weapons/TankBreechComponent.h"
 #include "Weapons/TankShellProjectile.h"
+#include "Combat/TankDamageTypes.h"
 #include "Cockpit/CockpitGrabUtils.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "TankGameVR.h"
@@ -54,6 +55,7 @@ FTransform UTankCannonComponent::GetMuzzleTransform() const
 
 bool UTankCannonComponent::Fire()
 {
+	const ETankRoundType Round = Breech ? Breech->GetLoadedRoundType() : ETankRoundType::AP;
 	if (!Breech || !Breech->Fire())
 	{
 		if (USoundBase* Sound = DryFireSound.LoadSynchronous())
@@ -76,8 +78,13 @@ bool UTankCannonComponent::Fire()
 		Projectile = GetWorld()->SpawnActor<ATankShellProjectile>(ProjectileClass, Muzzle, Params);
 		if (Projectile)
 		{
-			Projectile->Damage = Damage;
-			Projectile->Launch(Muzzle.GetRotation().GetForwardVector(), MuzzleSpeed, GetWorld()->GetFirstPlayerController());
+			const bool bHE = Round == ETankRoundType::HE;
+			Projectile->Damage = bHE ? HEDamage : Damage;
+			Projectile->DamageType = bHE ? UTankDamageType_HE::StaticClass() : UTankDamageType_AP::StaticClass();
+			Projectile->SplashDamage = bHE ? HESplashDamage : 0.0f;
+			Projectile->SplashRadius = bHE ? HESplashRadius : 0.0f;
+			Projectile->ImpactFlashSize = bHE ? 420.0f : 220.0f;
+			Projectile->Launch(Muzzle.GetRotation().GetForwardVector(), bHE ? HEMuzzleSpeed : MuzzleSpeed, GetWorld()->GetFirstPlayerController());
 			Projectile->FinishSpawning(Muzzle);
 		}
 	}

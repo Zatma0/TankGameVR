@@ -29,8 +29,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "100.0", Units = "CentimetersPerSecond"))
 	float MuzzleSpeed = 15000.0f;
 
+	/** AP round damage. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (ClampMin = "0.0"))
 	float Damage = 25.0f;
+
+	/** HE round: direct hit damage. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE", meta = (ClampMin = "0.0"))
+	float HEDamage = 25.0f;
+
+	/** HE blast damage at the centre (falls off to 0 at HESplashRadius). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE", meta = (ClampMin = "0.0"))
+	float HESplashDamage = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE", meta = (ClampMin = "0.0", Units = "Centimeters"))
+	float HESplashRadius = 450.0f;
+
+	/** HE is slower than AP. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE", meta = (ClampMin = "100.0", Units = "CentimetersPerSecond"))
+	float HEMuzzleSpeed = 11000.0f;
 
 	/** Barrel tip distance from the barrel pivot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (Units = "Centimeters"))

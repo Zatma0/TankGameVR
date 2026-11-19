@@ -13,7 +13,7 @@ class UStaticMeshComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnShellImpact, AActor*, HitActor, FVector, Location);
 
-/** Fired tank round: a fast tracer that deals point damage to whatever it hits and flashes. */
+/** Fired round (ours or an enemy's): a tracer that deals point damage to whatever it hits, plus optional blast. */
 UCLASS(Blueprintable)
 class TANKGAMEVR_API ATankShellProjectile : public AActor
 {
@@ -27,6 +27,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell")
 	TSubclassOf<UDamageType> DamageType;
+
+	/** HE blast radius. 0 = no blast. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell", meta = (ClampMin = "0.0", Units = "Centimeters"))
+	float SplashRadius = 0.0f;
+
+	/** Blast damage at the centre; it falls off to nothing at SplashRadius. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell", meta = (ClampMin = "0.0"))
+	float SplashDamage = 0.0f;
 
 	/** Size the hit flash grows to. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact", meta = (Units = "Centimeters"))
@@ -47,8 +55,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Shell")
 	FOnShellImpact OnImpact;
 
-	/** Speed is set by the cannon before the round is finished spawning. */
+	/** Speed is set by the gun before the round is finished spawning. */
 	void Launch(const FVector& Direction, float Speed, AController* InInstigatorController);
+
+	/** Tracer length/thickness multiplier (small for the autocannon). */
+	void SetTracerScale(float Scale);
+
+	/** The round flies through actors of this class (enemies don't shoot each other). */
+	void SetFriendlyClass(TSubclassOf<AActor> InFriendlyClass) { FriendlyClass = InFriendlyClass; }
 
 	UFUNCTION(BlueprintPure, Category = "Shell")
 	bool HasHit() const { return bHit; }
@@ -81,6 +95,8 @@ protected:
 
 private:
 	TWeakObjectPtr<AController> InstigatorController;
+	TSubclassOf<AActor> FriendlyClass;
 	bool bHit = false;
 	float FlashTime = 0.0f;
+	float FlashPeak = 400.0f;
 };
