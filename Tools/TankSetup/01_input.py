@@ -35,6 +35,7 @@ toggle_assist = make_action("IA_Tank_ToggleAimAssist", unreal.InputActionValueTy
 load_he = make_action("IA_Tank_LoadHE", unreal.InputActionValueType.BOOLEAN)
 smoke = make_action("IA_Tank_Smoke", unreal.InputActionValueType.BOOLEAN)
 extinguish = make_action("IA_Tank_Extinguish", unreal.InputActionValueType.BOOLEAN)
+radio = make_action("IA_Tank_Radio", unreal.InputActionValueType.BOOLEAN)
 trigger_left = make_action("IA_Tank_TriggerLeft", unreal.InputActionValueType.BOOLEAN)
 trigger_right = make_action("IA_Tank_TriggerRight", unreal.InputActionValueType.BOOLEAN)
 # The trigger also clicks the template menu and drives the hand pose, so firing must not swallow it.
@@ -115,6 +116,9 @@ for key in ["V", "Gamepad_DPad_Up"]:
     add(smoke, key)
 for key in ["G", "Gamepad_DPad_Down"]:
     add(extinguish, key)
+# Radio report without lifting the handset.
+for key in ["Q", "Gamepad_DPad_Right"]:
+    add(radio, key)
 
 # Aim Assist on/off without the VR menu.
 for key in ["T", "Gamepad_LeftThumbstick"]:

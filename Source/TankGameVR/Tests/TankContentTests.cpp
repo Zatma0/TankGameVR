@@ -6,7 +6,11 @@
 #include "Tests/TankTestUtils.h"
 #include "Cockpit/CockpitJoystickComponent.h"
 #include "Cockpit/TankSeatComponent.h"
+#include "Combat/TankDamageTypes.h"
 #include "Combat/TankHealthComponent.h"
+#include "Enemies/TankEnemy.h"
+#include "Game/TankLevelSetupSubsystem.h"
+#include "Misc/PackageName.h"
 #include "Weapons/TankBreechComponent.h"
 #include "Weapons/TankShellComponent.h"
 #include "Settings/TankSettingsSubsystem.h"
@@ -39,12 +43,7 @@ using namespace TankTests;
 
 namespace TankContentTests
 {
-	const TCHAR* TestSlot = TEXT("TankAutomationContentSettings");
-
-	UClass* LoadBlueprintClass(const FString& AssetPath)
-	{
-		return StaticLoadClass(UObject::StaticClass(), nullptr, *(AssetPath + TEXT(".") + FPaths::GetBaseFilename(AssetPath) + TEXT("_C")));
-	}
+	const TCHAR* ContentTestSlot = TEXT("TankAutomationContentSettings");
 
 	ATankVehicle* SpawnPlayerTank(FWorld& Test, const FTransform& Transform = FTransform(FVector(0, 0, 90)))
 	{
@@ -251,7 +250,7 @@ bool FTankContentPlayerTankTest::RunTest(const FString& Parameters)
 
 	// Everything the VR hand can pick up.
 	const TArray<FString> GrabSurfaces = { TEXT("DriveKnob"), TEXT("AimKnob"), TEXT("ShellACase"), TEXT("ShellBCase"), TEXT("ShellCCase"), TEXT("ShellDCase"), TEXT("CigarettePaper"),
-		TEXT("ExtinguisherBottle"), TEXT("SmokeCover") };
+		TEXT("ExtinguisherBottle"), TEXT("SmokeCover"), TEXT("RadioHandsetGrip") };
 	for (const FString& KnobString : GrabSurfaces)
 	{
 		const TCHAR* KnobName = *KnobString;
@@ -385,10 +384,10 @@ bool FTankContentEnemyHitTest::RunTest(const FString& Parameters)
 	// Don't depend on the player's saved Aim Assist choice.
 	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
 	{
-		Settings->SetSaveSlotForTesting(TestSlot);
+		Settings->SetSaveSlotForTesting(ContentTestSlot);
 		Settings->SetAimAssistEnabled(true);
 	}
-	ON_SCOPE_EXIT { UGameplayStatics::DeleteGameInSlot(TestSlot, 0); };
+	ON_SCOPE_EXIT { UGameplayStatics::DeleteGameInSlot(ContentTestSlot, 0); };
 	ATankVehicle* Tank = SpawnPlayerTank(Test);
 	// 30 degrees to the side, so the turret has to turn to hit it.
 	AActor* Enemy = Test.World->SpawnActor<AActor>(LoadBlueprintClass(TEXT("/Game/TankGame/Blueprints/Enemies/BP_EnemyTank_Placeholder")), FTransform(FVector(2600, 1500, 0)));
@@ -512,7 +511,7 @@ bool FTankContentWavesTest::RunTest(const FString& Parameters)
 	FWorld Test;
 	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
 	{
-		Settings->SetSaveSlotForTesting(TestSlot);
+		Settings->SetSaveSlotForTesting(ContentTestSlot);
 		Settings->SetAimAssistEnabled(true);
 	}
 	ATankVehicle* Tank = SpawnPlayerTank(Test);
@@ -554,7 +553,70 @@ bool FTankContentWavesTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	UGameplayStatics::DeleteGameInSlot(TestSlot, 0);
+	UGameplayStatics::DeleteGameInSlot(ContentTestSlot, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankUgurkanEnemyTest, "Tank.Content.UgurkanEnemiesBecomeOurs", TankTestFlags)
+bool FTankUgurkanEnemyTest::RunTest(const FString& Parameters)
+{
+	const FString Package = TEXT("/Game/TankGame/Ugurkan/BPs/Gameplay/BP_EnemyBase");
+	if (!FPackageName::DoesPackageExist(Package))
+	{
+		AddInfo(TEXT("Ugurkan's BP_EnemyBase is not in this checkout, nothing to check"));
+		return true;
+	}
+	UClass* Theirs = LoadBlueprintClass(Package);
+	if (!TestNotNull(TEXT("Ugurkan's BP_EnemyBase loads"), Theirs))
+	{
+		return false;
+	}
+	FWorld Test;
+	UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World);
+	if (Settings)
+	{
+		Settings->SetSaveSlotForTesting(ContentTestSlot);
+	}
+	ON_SCOPE_EXIT { UGameplayStatics::DeleteGameInSlot(ContentTestSlot, 0); };
+	SpawnPlayerTank(Test);
+	Test.Tick(0.1f);
+
+	// Spawned the way BP_EnemySpawner does it, as an AT gun (third entry of E_EnemyTypes).
+	const FTransform Where(FVector(3000, 0, 400));
+	AActor* Enemy = Test.World->SpawnActorDeferred<AActor>(Theirs, Where, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!TestNotNull(TEXT("their enemy spawns"), Enemy))
+	{
+		return false;
+	}
+	const FProperty* TypeProperty = Theirs->FindPropertyByName(TEXT("SpawnedEnemyType"));
+	if (const FEnumProperty* Enum = CastField<FEnumProperty>(TypeProperty))
+	{
+		Enum->GetUnderlyingProperty()->SetIntPropertyValue(Enum->ContainerPtrToValuePtr<void>(Enemy), static_cast<int64>(2));
+	}
+	else if (const FByteProperty* Byte = CastField<FByteProperty>(TypeProperty))
+	{
+		Byte->SetPropertyValue_InContainer(Enemy, 2);
+	}
+	else
+	{
+		AddError(TEXT("BP_EnemyBase has no SpawnedEnemyType variable any more"));
+		return false;
+	}
+	Enemy->FinishSpawning(Where);
+	const TWeakObjectPtr<AActor> Placeholder = Enemy;
+	Test.Tick(0.3f);
+
+	UTankLevelSetupSubsystem* Setup = Test.World->GetSubsystem<UTankLevelSetupSubsystem>();
+	ATankEnemy* Ours = Setup ? Setup->GetReplacement(Enemy) : nullptr;
+	if (!TestNotNull(TEXT("their placeholder became one of our enemies"), Ours))
+	{
+		return false;
+	}
+	TestTrue(TEXT("an AT gun, as asked"), Ours->EnemyType == ETankEnemyType::AntiTank);
+	TestTrue(TEXT("theirs is hidden"), Placeholder.IsValid() && Placeholder->IsHidden());
+	UGameplayStatics::ApplyDamage(Ours, 1000.0f, nullptr, nullptr, UTankDamageType_HE::StaticClass());
+	Test.Tick(0.3f);
+	TestFalse(TEXT("when ours is destroyed theirs goes too"), Placeholder.IsValid());
 	return true;
 }
 
@@ -567,7 +629,7 @@ bool FTankContentMenuTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	Settings->SetSaveSlotForTesting(TestSlot);
+	Settings->SetSaveSlotForTesting(ContentTestSlot);
 	Settings->SetAimAssistEnabled(true);
 
 	UClass* MenuClass = LoadBlueprintClass(TEXT("/Game/XRFramework/Blueprints/WBP_Menu"));
@@ -576,6 +638,7 @@ bool FTankContentMenuTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	const TStrongObjectPtr<UUserWidget> KeepMenu(Menu);
 	UAimAssistToggleWidget* Toggle = nullptr;
 	Menu->WidgetTree->ForEachWidget([&Toggle](UWidget* Widget)
 	{
@@ -591,7 +654,7 @@ bool FTankContentMenuTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("label shows Off"), Toggle->GetLabel().ToString(), FString(TEXT("Aim Assist: Off")));
 	Toggle->Toggle();
 	TestTrue(TEXT("and back on"), Settings->IsAimAssistEnabled());
-	UGameplayStatics::DeleteGameInSlot(TestSlot, 0);
+	UGameplayStatics::DeleteGameInSlot(ContentTestSlot, 0);
 	return true;
 }
 
