@@ -1,4 +1,5 @@
 #include "Cockpit/CockpitFireComponent.h"
+#include "Combat/TankDamageReactionComponent.h"
 #include "Combat/TankDamageTypes.h"
 #include "TankGameVR.h"
 #include "Components/PointLightComponent.h"
@@ -97,6 +98,17 @@ void UCockpitFireComponent::SpreadToNeighbour()
 {
 	TArray<UCockpitFireComponent*> Spots;
 	GetOwner()->GetComponents(Spots);
+	// Not past the limit of places that may burn at once.
+	const UTankDamageReactionComponent* Reaction = GetOwner()->FindComponentByClass<UTankDamageReactionComponent>();
+	int32 Burning = 0;
+	for (const UCockpitFireComponent* Spot : Spots)
+	{
+		Burning += Spot->IsBurning() ? 1 : 0;
+	}
+	if (Reaction && Burning >= Reaction->MaxFires)
+	{
+		return;
+	}
 	UCockpitFireComponent* Nearest = nullptr;
 	double Best = TNumericLimits<double>::Max();
 	for (UCockpitFireComponent* Spot : Spots)

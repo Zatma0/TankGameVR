@@ -1,4 +1,5 @@
 #include "Weapons/TankBreechComponent.h"
+#include "Audio/TankAudio.h"
 #include "Weapons/TankShellComponent.h"
 #include "Cockpit/CockpitGrabUtils.h"
 #include "Components/PrimitiveComponent.h"
@@ -14,7 +15,12 @@ UTankBreechComponent::UTankBreechComponent()
 	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 	SetMobility(EComponentMobility::Movable);
 
-	CloseSound = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/Weapons/GrenadeLauncher/Audio/FirstPersonTemplateWeaponFire02.FirstPersonTemplateWeaponFire02")));
+	CaptureSound = TankAudio::Sound(TEXT("SW_Shell_Ram"));
+	SeatSound = TankAudio::Sound(TEXT("SW_Shell_Seat"));
+	CloseSound = TankAudio::Sound(TEXT("SW_Breech_Close"));
+	ReadySound = TankAudio::Sound(TEXT("SW_Gun_Ready"));
+	OpenSound = TankAudio::Sound(TEXT("SW_Breech_Open"));
+	CasingSound = TankAudio::Sound(TEXT("SW_Casing_Drop"));
 	ClickHaptic = TSoftObjectPtr<UHapticFeedbackEffect_Base>(FSoftObjectPath(TEXT("/Game/XRFramework/Haptics/GrabHapticEffect.GrabHapticEffect")));
 }
 
@@ -150,6 +156,7 @@ bool UTankBreechComponent::StartAutoLoad(UTankShellComponent* Round)
 	Shell = Round;
 	LoadedType = Round->RoundType;
 	SetState(ETankBreechState::AutoLoading);
+	PlaySound(CaptureSound, 0.7f, 1.0f);
 	return true;
 }
 
@@ -204,7 +211,7 @@ void UTankBreechComponent::TryCapture()
 		Shell = Round;
 		LoadedType = Round->RoundType;
 		SetState(ETankBreechState::Ramming);
-		PlaySound(CaptureSound, 0.5f, 1.0f);
+		PlaySound(CaptureSound, 0.7f, 1.0f);
 		Click(Round->GetHand(), 0.4f);
 		return;
 	}
@@ -276,7 +283,7 @@ void UTankBreechComponent::StartClosing(USceneComponent* FromHand)
 	Round->SetLocked(true);
 	CloseStartPosition = Round->GetRailPosition();
 	SetState(ETankBreechState::Closing);
-	PlaySound(CloseSound, CloseSoundVolume, CloseSoundPitch);
+	PlaySound(SeatSound, 0.8f, 1.0f);
 	Click(FromHand, 1.0f);
 }
 
@@ -298,6 +305,7 @@ void UTankBreechComponent::UpdateRecoil()
 	{
 		SetRelativeTransform(RestRelativeTransform);
 		SetState(ETankBreechState::Open);
+		PlaySound(OpenSound, 0.8f, 1.0f);
 		EjectCasing();
 	}
 }
@@ -312,6 +320,7 @@ void UTankBreechComponent::EjectCasing()
 	CasingSpeed = RestRelativeTransform.GetRotation().RotateVector(CasingVelocity);
 	CasingRemaining = CasingLifetime;
 	bCasingFlying = true;
+	bCasingLanded = false;
 	Casing->SetRelativeLocationAndRotation(CasingLocation, RestRelativeTransform.GetRotation());
 	Casing->SetVisibility(true, true);
 }
@@ -329,6 +338,9 @@ void UTankBreechComponent::UpdateCasing(float DeltaTime)
 		if (CasingLocation.Z <= CasingFloorZ)
 		{
 			CasingLocation.Z = CasingFloorZ;
+			// Loud the first time it lands, a rattle for each bounce after that.
+			PlaySound(CasingSound, bCasingLanded ? 0.3f : 0.75f, bCasingLanded ? 1.25f : 1.0f);
+			bCasingLanded = true;
 			// Small bounce, then it lies there.
 			CasingSpeed = FVector(CasingSpeed.X * 0.4, CasingSpeed.Y * 0.4, -CasingSpeed.Z * 0.3);
 			bCasingFlying = CasingSpeed.Z > 25.0;
@@ -360,10 +372,8 @@ void UTankBreechComponent::UpdateVisuals(float DeltaTime)
 
 void UTankBreechComponent::PlaySound(const TSoftObjectPtr<USoundBase>& Sound, float Volume, float Pitch) const
 {
-	if (USoundBase* Loaded = Sound.LoadSynchronous())
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, Loaded, GetComponentLocation(), Volume, Pitch);
-	}
+	// The breech is next to the crew: heard directly, not from out in the world.
+	UTankAudioSubsystem::PlayInside(this, Sound.LoadSynchronous(), Volume, Pitch);
 }
 
 void UTankBreechComponent::Click(USceneComponent* Hand, float Scale) const
@@ -399,6 +409,9 @@ void UTankBreechComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		if (StateTime >= CloseTime)
 		{
 			SetState(ETankBreechState::Loaded);
+			// The wedge is home and the lamp comes on.
+			PlaySound(CloseSound, CloseSoundVolume, CloseSoundPitch);
+			PlaySound(ReadySound, 0.5f, 1.0f);
 		}
 		break;
 	case ETankBreechState::Recoil:

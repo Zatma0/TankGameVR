@@ -10,8 +10,9 @@ class UStaticMesh;
 class UStaticMeshComponent;
 
 /**
- * Smoke screen from the tank's grenade launchers. Spawn it where the screen should stand, facing away from the tank:
- * the grenades fly out from LaunchFrom, burst and bloom into a wall of smoke along the actor's Y axis.
+ * Smoke screen from the tank's grenade launchers. Spawn it where the screen should stand, facing away from the tank.
+ * With GrenadeStarts/GrenadeTargets each grenade flies from its own tube to its own spot (a fan in front of the
+ * turret). Without them the grenades fly out from LaunchFrom into a straight wall along the actor's Y axis.
  * Enemy gunners can't see through it (IsLineBlocked).
  */
 UCLASS(Blueprintable)
@@ -51,9 +52,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
 	TSoftObjectPtr<UMaterialInterface> SmokeMaterial;
 
+	/** The grenades bursting: played once, the moment the smoke starts to bloom. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	TSoftObjectPtr<class USoundBase> BurstSound;
+
 	/** Where the grenades leave the tank (set before BeginPlay). */
 	UPROPERTY(BlueprintReadWrite, Category = "Smoke", meta = (ExposeOnSpawn = "true"))
 	FVector LaunchFrom = FVector::ZeroVector;
+
+	/** One per grenade: the tube it leaves from (set before BeginPlay). */
+	UPROPERTY(BlueprintReadWrite, Category = "Smoke")
+	TArray<FVector> GrenadeStarts;
+
+	/** One per grenade: where it bursts, on the ground (set before BeginPlay). */
+	UPROPERTY(BlueprintReadWrite, Category = "Smoke")
+	TArray<FVector> GrenadeTargets;
 
 	/** 0..1, how thick the screen is right now. */
 	UFUNCTION(BlueprintPure, Category = "Smoke")
@@ -75,6 +88,7 @@ protected:
 private:
 	struct FPuff
 	{
+		FVector From = FVector::ZeroVector;
 		FVector Target = FVector::ZeroVector;
 		FVector Drift = FVector::ZeroVector;
 		float Delay = 0.0f;
@@ -92,4 +106,5 @@ private:
 
 	TArray<FPuff> Puffs;
 	float Age = 0.0f;
+	bool bBurstPlayed = false;
 };

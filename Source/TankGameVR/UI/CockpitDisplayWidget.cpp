@@ -1,4 +1,5 @@
 #include "UI/CockpitDisplayWidget.h"
+#include "Cockpit/CockpitRadioComponent.h"
 #include "Targeting/TankTargetingComponent.h"
 #include "Targeting/TargetRegistrySubsystem.h"
 #include "Targeting/TargetableComponent.h"
@@ -7,6 +8,9 @@
 #include "Cockpit/CockpitFireComponent.h"
 #include "Cockpit/CockpitSmokeLauncherComponent.h"
 #include "Combat/TankDamageReactionComponent.h"
+#include "Combat/TankDamageTypes.h"
+#include "Combat/TankGroundFire.h"
+#include "Weapons/TankCannonComponent.h"
 #include "Combat/TankHealthComponent.h"
 #include "Enemies/TankEnemy.h"
 #include "Game/TankArenaDirector.h"
@@ -167,7 +171,7 @@ void UCockpitDisplayWidget::UpdateTankLines()
 	}
 	const UTankHealthComponent* Health = Tank_->GetHealth();
 	const float Hull = Health ? Health->GetHealthFraction() : 1.0f;
-	LastHullLine = FString::Printf(TEXT("HULL %d%%"), FMath::RoundToInt(Hull * 100.0f));
+	LastHullLine = FString::Printf(TEXT("HULL %d%%%s"), FMath::RoundToInt(Hull * 100.0f), Health && Health->IsRepairing() ? TEXT("  REPAIRING") : TEXT(""));
 
 	const UTankBreechComponent* Breech_ = Tank_->GetBreech();
 	const UCockpitSmokeLauncherComponent* Smoke = Tank_->GetSmokeLauncher();
@@ -203,6 +207,10 @@ void UCockpitDisplayWidget::UpdateTankLines()
 	{
 		LastWarning = bBlink ? TEXT("AT GUN AIMING - MOVE OR SMOKE!") : TEXT(" ");
 	}
+	else if (ATankGroundFire::IsBurningAt(GetWorld(), Tank_->GetActorLocation()))
+	{
+		LastWarning = bBlink ? TEXT("BURNING GROUND - DRIVE OUT!") : TEXT(" ");
+	}
 	else if (bFire)
 	{
 		LastWarning = bBlink ? TEXT("FIRE! USE THE EXTINGUISHER") : TEXT(" ");
@@ -211,6 +219,23 @@ void UCockpitDisplayWidget::UpdateTankLines()
 	else if (Reaction && Reaction->GetTimeSinceHit() < 1.5f && !Reaction->GetLastHitSide().IsEmpty())
 	{
 		LastWarning = FString::Printf(TEXT("HIT - %s"), *Reaction->GetLastHitSide());
+	}
+	else if (Tank_->GetRadio() && !Tank_->GetRadio()->GetTranscript().IsEmpty())
+	{
+		// Subtitle of what command just said.
+		LastWarning = Tank_->GetRadio()->GetTranscript();
+		WarningColor = ReadyColor;
+	}
+	else if (Tank_->GetRadio() && Tank_->GetRadio()->IsCalling())
+	{
+		LastWarning = bBlink ? TEXT("RADIO CALL - PICK UP THE HANDSET") : TEXT(" ");
+		WarningColor = ReadyColor;
+	}
+	else if (Tank_->GetCannon() && Tank_->GetCannon()->GetTimeSinceShotReport() < 2.5f)
+	{
+		// What our last round did.
+		LastWarning = Tank_->GetCannon()->GetShotReport();
+		WarningColor = LastWarning.Contains(TEXT("WEAK")) || LastWarning.Contains(TEXT("MISSED")) ? SelectableColor : ReadyColor;
 	}
 	else
 	{
@@ -258,11 +283,24 @@ void UCockpitDisplayWidget::UpdateGunLine()
 {
 	const UTankBreechComponent* Breech_ = Breech.Get();
 	LastGunLine = Breech_ ? Breech_->GetStatusText() : FString();
+	const bool bReady = Breech_ && Breech_->IsLoaded();
+	bool bWeak = false;
+	const UTargetableComponent* Target = Targeting.IsValid() ? Targeting->GetCurrentTarget() : nullptr;
+	if (bReady && Target && Target->GetOwner())
+	{
+		// Say whether the loaded round suits the locked target's armour.
+		if (const UTankHealthComponent* Armour = Target->GetOwner()->FindComponentByClass<UTankHealthComponent>())
+		{
+			const bool bHE = Breech_->GetLoadedRoundType() == ETankRoundType::HE;
+			const TSubclassOf<UDamageType> Type = bHE ? TSubclassOf<UDamageType>(UTankDamageType_HE::StaticClass()) : TSubclassOf<UDamageType>(UTankDamageType_AP::StaticClass());
+			bWeak = Armour->GetDamageMultiplier(Type) < 0.95f;
+			LastGunLine += FString::Printf(TEXT("  %s VS %s"), bWeak ? TEXT("WEAK") : TEXT("GOOD"), *Target->GetTargetDisplayName().ToString().ToUpper());
+		}
+	}
 	if (GunText)
 	{
 		GunText->SetText(FText::FromString(LastGunLine));
-		const bool bReady = Breech_ && Breech_->IsLoaded();
-		GunText->SetColorAndOpacity(FSlateColor(bReady ? ReadyColor : SelectableColor));
+		GunText->SetColorAndOpacity(FSlateColor(bWeak ? LockedColor : (bReady ? ReadyColor : SelectableColor)));
 	}
 }
 

@@ -23,11 +23,19 @@ public:
 
 	/** Chance that a heavy hit (tank or AT gun) starts a fire. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float HeavyHitFireChance = 0.45f;
+	float HeavyHitFireChance = 0.15f;
 
 	/** Chance per autocannon round. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float LightHitFireChance = 0.06f;
+	float LightHitFireChance = 0.02f;
+
+	/** No new fire for this long after one started. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", Units = "Seconds"))
+	float MinTimeBetweenFires = 20.0f;
+
+	/** Most places that burn at once (spreading included). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "1"))
+	int32 MaxFires = 2;
 
 	/** Hits below this are light. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
@@ -67,6 +75,8 @@ protected:
 
 private:
 	void StartFire();
+
+	double LastFireTime = -1000.0;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPointLightComponent> CockpitLight;

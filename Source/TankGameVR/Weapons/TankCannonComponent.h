@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Combat/TankDamageTypes.h"
 #include "TankCannonComponent.generated.h"
 
+class ATankGroundFire;
 class ATankShellProjectile;
 class UHapticFeedbackEffect_Base;
 class USoundBase;
@@ -48,9 +50,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE", meta = (ClampMin = "100.0", Units = "CentimetersPerSecond"))
 	float HEMuzzleSpeed = 11000.0f;
 
+	/** HE sets the ground on fire where it lands. None = no fire. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|HE")
+	TSubclassOf<ATankGroundFire> HEGroundFireClass;
+
+	/** AP: thin pale streak. HE: fat red one. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	FLinearColor APTracerColor = FLinearColor(1.0f, 0.92f, 0.55f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	FLinearColor HETracerColor = FLinearColor(1.0f, 0.2f, 0.04f);
+
 	/** Barrel tip distance from the barrel pivot. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon", meta = (Units = "Centimeters"))
-	float MuzzleDistance = 360.0f;
+	float MuzzleDistance = 510.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Setup")
 	FName BarrelComponentName = TEXT("BarrelPivot");
@@ -68,9 +81,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
 	TSoftObjectPtr<USoundBase> FireSound;
 
-	/** Low pitch makes the pistol sample sound like a big gun. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
-	float FireSoundPitch = 0.45f;
+	float FireSoundPitch = 1.0f;
+
+	/** The same shot as the crew hears it inside the hull. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	TSoftObjectPtr<USoundBase> InteriorFireSound;
+
+	/** AP on a vehicle: steel on steel. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	TSoftObjectPtr<USoundBase> APImpactSound;
+
+	/** HE going off, wherever it lands. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	TSoftObjectPtr<USoundBase> HEImpactSound;
+
+	/** AP into the ground or a wall. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
+	TSoftObjectPtr<USoundBase> GroundImpactSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cannon|Feedback")
 	TSoftObjectPtr<USoundBase> DryFireSound;
@@ -91,6 +119,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cannon")
 	int32 GetShotsFired() const { return ShotsFired; }
 
+	/** What the last round did, for the display ("AP HIT TANK -25"). */
+	UFUNCTION(BlueprintPure, Category = "Cannon")
+	FString GetShotReport() const { return ShotReport; }
+
+	UFUNCTION(BlueprintPure, Category = "Cannon")
+	float GetTimeSinceShotReport() const;
+
 	UFUNCTION(BlueprintPure, Category = "Cannon")
 	FTransform GetMuzzleTransform() const;
 
@@ -98,6 +133,9 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	UFUNCTION()
+	void HandleShellImpact(AActor* HitActor, FVector Location);
 
 private:
 	void ShowMuzzleFlash(bool bShow);
@@ -113,5 +151,9 @@ private:
 	TArray<TObjectPtr<USceneComponent>> FlashComponents;
 
 	int32 ShotsFired = 0;
+	FString ShotReport;
+	double ShotReportTime = -1000.0;
+	ETankRoundType LastRound = ETankRoundType::AP;
+	float LastDamage = 0.0f;
 	float FlashRemaining = 0.0f;
 };

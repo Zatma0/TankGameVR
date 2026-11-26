@@ -78,10 +78,22 @@ void UTankDamageReactionComponent::StartFire()
 {
 	TArray<UCockpitFireComponent*> Spots;
 	GetOwner()->GetComponents(Spots);
-	if (Spots.Num() > 0)
+	// A few fires at most, each in its own place, and a breather between them.
+	TArray<UCockpitFireComponent*> Free;
+	for (UCockpitFireComponent* Spot : Spots)
 	{
-		Spots[FMath::RandRange(0, Spots.Num() - 1)]->Ignite(0.35f);
+		if (!Spot->IsBurning())
+		{
+			Free.Add(Spot);
+		}
 	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Free.Num() == 0 || Spots.Num() - Free.Num() >= MaxFires || Now - LastFireTime < MinTimeBetweenFires)
+	{
+		return;
+	}
+	LastFireTime = Now;
+	Free[FMath::RandRange(0, Free.Num() - 1)]->Ignite(0.35f);
 }
 
 void UTankDamageReactionComponent::ResetDamage()
@@ -92,6 +104,7 @@ void UTankDamageReactionComponent::ResetDamage()
 	{
 		Spot->PutOut();
 	}
+	LastFireTime = -1000.0;
 	HitFlash = 0.0f;
 	FlickerTime = 0.0f;
 	TimeSinceHit = 1000.0f;

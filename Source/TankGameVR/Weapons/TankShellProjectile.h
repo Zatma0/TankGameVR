@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "TankShellProjectile.generated.h"
 
+class ATankGroundFire;
 class UMaterialInterface;
 class UPointLightComponent;
 class UProjectileMovementComponent;
@@ -36,6 +37,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell", meta = (ClampMin = "0.0"))
 	float SplashDamage = 0.0f;
 
+	/** Left burning on the ground where the round lands (HE). None = no fire. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell")
+	TSubclassOf<ATankGroundFire> GroundFireClass;
+
+	/** Tracer and flash colour. Black keeps the material's own. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Visuals")
+	FLinearColor Tint = FLinearColor::Black;
+
 	/** Size the hit flash grows to. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact", meta = (Units = "Centimeters"))
 	float ImpactFlashSize = 220.0f;
@@ -46,8 +55,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact")
 	TSoftObjectPtr<USoundBase> ImpactSound;
 
+	/** When it hits ground, a wall or anything that is not a vehicle. Empty = ImpactSound. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact")
-	float ImpactSoundPitch = 0.4f;
+	TSoftObjectPtr<USoundBase> GroundImpactSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact")
+	float ImpactSoundPitch = 1.0f;
+
+	/** How far the impact is heard. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Impact", meta = (Units = "Centimeters"))
+	float ImpactReach = 25000.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell|Visuals")
 	TSoftObjectPtr<UMaterialInterface> TracerMaterial;

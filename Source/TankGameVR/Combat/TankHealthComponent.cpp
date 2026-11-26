@@ -1,12 +1,29 @@
 #include "Combat/TankHealthComponent.h"
 #include "Targeting/TargetableComponent.h"
 #include "TankGameVR.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/DamageType.h"
 
 UTankHealthComponent::UTankHealthComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	// Only ticks for owners that repair themselves.
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+}
+
+bool UTankHealthComponent::IsRepairing() const
+{
+	return RepairPerSecond > 0.0f && !bDead && Health < MaxHealth && GetWorld() && GetWorld()->GetTimeSeconds() - LastDamageTime >= RepairDelay;
+}
+
+void UTankHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (IsRepairing())
+	{
+		Health = FMath::Min(MaxHealth, Health + RepairPerSecond * DeltaTime);
+	}
 }
 
 void UTankHealthComponent::BeginPlay()
@@ -18,6 +35,7 @@ void UTankHealthComponent::BeginPlay()
 	}
 	bStarted = true;
 	GetOwner()->OnTakeAnyDamage.AddUniqueDynamic(this, &UTankHealthComponent::HandleAnyDamage);
+	SetComponentTickEnabled(RepairPerSecond > 0.0f);
 }
 
 float UTankHealthComponent::GetDamageMultiplier(TSubclassOf<UDamageType> DamageType) const
@@ -53,6 +71,7 @@ float UTankHealthComponent::Heal(float Amount)
 void UTankHealthComponent::ResetHealth()
 {
 	Health = MaxHealth;
+	LastDamageTime = -1000.0;
 	bDead = false;
 	if (UTargetableComponent* Targetable = GetOwner() ? GetOwner()->FindComponentByClass<UTargetableComponent>() : nullptr)
 	{
@@ -72,6 +91,7 @@ void UTankHealthComponent::HandleAnyDamage(AActor* DamagedActor, float Damage, c
 		return;
 	}
 	Health = FMath::Max(0.0f, Health - Damage);
+	LastDamageTime = GetWorld()->GetTimeSeconds();
 	OnHealthChanged.Broadcast(this, Damage, DamageType);
 	UE_LOG(LogTankGame, Log, TEXT("%s took %.0f damage, %.0f left"), *GetOwner()->GetName(), Damage, Health);
 	if (Health > 0.0f)

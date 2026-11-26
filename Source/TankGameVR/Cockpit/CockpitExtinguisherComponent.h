@@ -39,9 +39,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Extinguisher", meta = (ClampMin = "0.0"))
 	float ExtinguishRate = 0.7f;
 
-	/** Charge used per second of spraying (1 = full bottle). */
+	/** Charge used per second of spraying (1 = full bottle). 0 = the bottle never runs out. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Extinguisher", meta = (ClampMin = "0.0"))
-	float UsePerSecond = 0.1f;
+	float UsePerSecond = 0.0f;
 
 	/** Charge that comes back per second (a crew mate swapping bottles...). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Extinguisher", meta = (ClampMin = "0.0"))

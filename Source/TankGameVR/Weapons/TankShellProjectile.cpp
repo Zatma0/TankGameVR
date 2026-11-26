@@ -1,4 +1,7 @@
 #include "Weapons/TankShellProjectile.h"
+#include "Audio/TankAudio.h"
+#include "Combat/TankGroundFire.h"
+#include "Combat/TankHealthComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -7,6 +10,7 @@
 #include "GameFramework/DamageType.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
@@ -64,7 +68,8 @@ ATankShellProjectile::ATankShellProjectile()
 	Movement->bShouldBounce = false;
 
 	TracerMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/TankGame/Materials/MI_Tank_Tracer.MI_Tank_Tracer")));
-	ImpactSound = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/XRFramework/Audio/Fire_Cue.Fire_Cue")));
+	ImpactSound = TankAudio::Sound(TEXT("SW_Impact_AP"));
+	GroundImpactSound = TankAudio::Sound(TEXT("SW_Impact_Dirt"));
 }
 
 void ATankShellProjectile::BeginPlay()
@@ -91,6 +96,13 @@ void ATankShellProjectile::BeginPlay()
 	}
 	if (UMaterialInterface* Material = TracerMaterial.LoadSynchronous())
 	{
+		if (!Tint.Equals(FLinearColor::Black))
+		{
+			UMaterialInstanceDynamic* Tinted = UMaterialInstanceDynamic::Create(Material, this);
+			Tinted->SetVectorParameterValue(TEXT("Color"), Tint);
+			Material = Tinted;
+			Light->SetLightColor(Tint);
+		}
 		Tracer->SetMaterial(0, Material);
 		ImpactFlash->SetMaterial(0, Material);
 	}
@@ -141,10 +153,14 @@ void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* 
 		UGameplayStatics::ApplyRadialDamageWithFalloff(this, SplashDamage, 0.0f, Hit.ImpactPoint + Hit.ImpactNormal * 20.0,
 			SplashRadius * 0.3f, SplashRadius, 1.0f, DamageType, Ignore, this, InstigatorController.Get(), ECC_Visibility);
 	}
-	if (USoundBase* Sound = ImpactSound.LoadSynchronous())
+	if (GroundFireClass)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, Hit.ImpactPoint, 1.0f, ImpactSoundPitch);
+		ATankGroundFire::StartBelow(GetWorld(), GroundFireClass, Hit.ImpactPoint + Hit.ImpactNormal * 20.0, GetOwner(), InstigatorController.Get());
 	}
+	// Steel on steel for a vehicle, earth and stones for anything else.
+	const bool bVehicle = OtherActor && OtherActor->FindComponentByClass<UTankHealthComponent>();
+	USoundBase* Sound = (bVehicle || GroundImpactSound.IsNull()) ? ImpactSound.LoadSynchronous() : GroundImpactSound.LoadSynchronous();
+	UTankAudioSubsystem::PlayAt(this, Sound, Hit.ImpactPoint, 0.85f, ImpactSoundPitch * FMath::FRandRange(0.95f, 1.05f), ImpactReach);
 	OnImpact.Broadcast(OtherActor, Hit.ImpactPoint);
 
 	// Stop and show the flash for a moment.

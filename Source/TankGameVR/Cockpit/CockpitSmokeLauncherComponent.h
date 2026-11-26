@@ -39,6 +39,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke", meta = (Units = "Centimeters"))
 	float ScreenDistance = 2200.0f;
 
+	/** Launcher tubes in the bank on each side of the turret. One grenade each per salvo. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers", meta = (ClampMin = "1", ClampMax = "8"))
+	int32 TubesPerSide = 4;
+
+	/** The salvo fans out this far to each side of the gun. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers", meta = (ClampMin = "5.0", ClampMax = "90.0", Units = "Degrees"))
+	float FanAngle = 44.0f;
+
+	/** Component the banks are mounted on. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers")
+	FName TurretName = TEXT("TurretPivot");
+
+	/** Where the right bank sits on the turret; the left one is mirrored. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers")
+	FVector BankOffset = FVector(62.0, 100.0, 14.0);
+
+	/** Show simple tubes on the turret (switch off once the turret model has its own). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers")
+	bool bShowTubes = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Launchers")
+	TSoftObjectPtr<UMaterialInterface> TubeMaterial;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Cover", meta = (Units = "Degrees"))
 	float CoverOpenAngle = 105.0f;
 
@@ -65,6 +88,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Feedback")
 	TSoftObjectPtr<USoundBase> LaunchSound;
+
+	/** The guard cover latching and the button going down. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Feedback")
+	TSoftObjectPtr<USoundBase> ClickSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke|Feedback")
 	TSoftObjectPtr<UHapticFeedbackEffect_Base> ClickHaptic;
@@ -106,10 +133,15 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	/** Tube mouth and direction in turret space. Right bank first, inner tube first. */
+	void GetTube(int32 Index, FVector& OutMouth, FVector& OutDirection, float& OutYaw) const;
 	void UpdateCover(float DeltaTime);
 	void UpdateButton(float DeltaTime);
 	void UpdateLamp();
 	void GetFingertips(TArray<FVector>& Out) const;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USceneComponent> Turret;
 
 	UPROPERTY(Transient)
 	TObjectPtr<USceneComponent> Hinge;
@@ -133,5 +165,6 @@ private:
 	float ReloadRemaining = 0.0f;
 	int32 Charges = 2;
 	bool bFingerWasOnButton = false;
+	bool bCoverWasOpen = false;
 	bool bSurfaceApplied = false;
 };

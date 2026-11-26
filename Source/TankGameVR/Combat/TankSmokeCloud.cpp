@@ -1,4 +1,6 @@
 #include "Combat/TankSmokeCloud.h"
+#include "Audio/TankAudio.h"
+#include "Sound/SoundBase.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -19,6 +21,7 @@ ATankSmokeCloud::ATankSmokeCloud()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	PuffMesh = Sphere.Object;
 	SmokeMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/TankGame/Materials/MI_Smoke_Screen.MI_Smoke_Screen")));
+	BurstSound = TankAudio::Sound(TEXT("SW_Smoke_Burst"));
 }
 
 void ATankSmokeCloud::BeginPlay()
@@ -33,15 +36,30 @@ void ATankSmokeCloud::BeginPlay()
 
 	UMaterialInterface* Material = SmokeMaterial.LoadSynchronous();
 	const FTransform Frame = GetActorTransform();
+	const bool bFan = GrenadeTargets.Num() > 0;
+	if (bFan)
+	{
+		PuffCount = GrenadeTargets.Num();
+	}
 	Puffs.SetNum(PuffCount);
 	for (int32 Index = 0; Index < PuffCount; ++Index)
 	{
-		// A wall across the line of fire, a little uneven, with a second row behind the middle.
-		const float Alpha = PuffCount > 1 ? static_cast<float>(Index) / (PuffCount - 1) : 0.5f;
-		const bool bBackRow = Index % 3 == 1;
-		const FVector Local(bBackRow ? 250.0f : FMath::FRandRange(-80.0f, 80.0f), (Alpha - 0.5f) * Width + FMath::FRandRange(-120.0f, 120.0f), PuffRadius * 0.55f);
 		FPuff& Puff = Puffs[Index];
-		Puff.Target = Frame.TransformPositionNoScale(Local);
+		if (bFan)
+		{
+			// Each grenade from its own tube to its own spot.
+			Puff.From = GrenadeStarts.IsValidIndex(Index) ? GrenadeStarts[Index] : LaunchFrom;
+			Puff.Target = GrenadeTargets[Index] + FVector(FMath::FRandRange(-60.0f, 60.0f), FMath::FRandRange(-60.0f, 60.0f), PuffRadius * 0.55f);
+		}
+		else
+		{
+			// A wall across the line of fire, a little uneven, with a second row behind the middle.
+			const float Alpha = PuffCount > 1 ? static_cast<float>(Index) / (PuffCount - 1) : 0.5f;
+			const bool bBackRow = Index % 3 == 1;
+			const FVector Local(bBackRow ? 250.0f : FMath::FRandRange(-80.0f, 80.0f), (Alpha - 0.5f) * Width + FMath::FRandRange(-120.0f, 120.0f), PuffRadius * 0.55f);
+			Puff.From = LaunchFrom;
+			Puff.Target = Frame.TransformPositionNoScale(Local);
+		}
 		Puff.Drift = FVector(FMath::FRandRange(-15.0f, 15.0f), FMath::FRandRange(-15.0f, 15.0f), FMath::FRandRange(8.0f, 18.0f));
 		Puff.Delay = FMath::FRandRange(0.0f, 0.25f);
 		Puff.Scale = FMath::FRandRange(0.8f, 1.15f);
@@ -86,7 +104,7 @@ FVector ATankSmokeCloud::GetPuffLocation(int32 Index) const
 	{
 		// Grenade arc out of the launcher.
 		const float A = FMath::Clamp(T / FlightTime, 0.0f, 1.0f);
-		FVector Location = FMath::Lerp(LaunchFrom, Puff.Target, A);
+		FVector Location = FMath::Lerp(Puff.From, Puff.Target, A);
 		Location.Z += FMath::Sin(A * PI) * 500.0f;
 		return Location;
 	}
@@ -140,6 +158,11 @@ void ATankSmokeCloud::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
+	if (!bBurstPlayed && Age >= FlightTime)
+	{
+		bBurstPlayed = true;
+		UTankAudioSubsystem::PlayAt(this, BurstSound.LoadSynchronous(), GetActorLocation() + FVector(0, 0, 200), 0.85f, 1.0f, 15000.0f);
+	}
 	const float Fade = FMath::Clamp((Lifetime - Age) / FadeTime, 0.0f, 1.0f);
 	for (int32 Index = 0; Index < PuffMeshes.Num(); ++Index)
 	{

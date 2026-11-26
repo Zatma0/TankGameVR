@@ -114,17 +114,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Casing", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float CasingLifetime = 3.0f;
 
+	/** The round scraping into the chamber (as it is caught, or when an auto load starts). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<USoundBase> CaptureSound;
 
+	/** The round sliding home. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> SeatSound;
+
+	/** The wedge shut: played on the frame it has closed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<USoundBase> CloseSound;
 
+	/** The ready lamp coming on. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
-	float CloseSoundPitch = 1.8f;
+	TSoftObjectPtr<USoundBase> ReadySound;
+
+	/** The breech dropping open after the recoil. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> OpenSound;
+
+	/** The case stub hitting the floor: played on the frame it lands. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> CasingSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
-	float CloseSoundVolume = 0.35f;
+	float CloseSoundPitch = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	float CloseSoundVolume = 0.85f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<UHapticFeedbackEffect_Base> ClickHaptic;
@@ -216,4 +234,5 @@ private:
 	float BlockAlpha = 0.0f;
 	float CasingRemaining = 0.0f;
 	bool bCasingFlying = false;
+	bool bCasingLanded = false;
 };

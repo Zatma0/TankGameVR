@@ -32,6 +32,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	bool bDestroyOwnerOnDeath = true;
 
+	/** HP per second that come back while nothing has hit it for RepairDelay. 0 = no self repair. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health|Repair", meta = (ClampMin = "0.0"))
+	float RepairPerSecond = 0.0f;
+
+	/** Seconds without any damage (fire counts) before the repair starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health|Repair", meta = (ClampMin = "0.0", Units = "Seconds"))
+	float RepairDelay = 8.0f;
+
 	/** Delay before the owner is removed (lets the hit flash play). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float DestroyDelay = 0.3f;
@@ -50,6 +58,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Health")
 	bool IsDead() const { return bDead; }
+
+	/** True while HP are coming back by themselves. */
+	UFUNCTION(BlueprintPure, Category = "Health|Repair")
+	bool IsRepairing() const;
+
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintPure, Category = "Health")
 	float GetDamageMultiplier(TSubclassOf<UDamageType> DamageType) const;
@@ -73,6 +87,7 @@ protected:
 
 private:
 	float Health = 0.0f;
+	double LastDamageTime = -1000.0;
 	bool bDead = false;
 	bool bStarted = false;
 };
