@@ -21,7 +21,7 @@ using namespace TankTests;
 
 namespace TankTargetingTests
 {
-	const TCHAR* TestSlot = TEXT("TankAutomationTestSettings");
+	const TCHAR* TargetingTestSlot = TEXT("TankAutomationTestSettings");
 
 	/** Tank at the origin facing +X with four targets at the given bearings (deg, right positive), 30 m away. */
 	struct FTargetScene
@@ -35,7 +35,7 @@ namespace TankTargetingTests
 		{
 			if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
 			{
-				Settings->SetSaveSlotForTesting(TestSlot);
+				Settings->SetSaveSlotForTesting(TargetingTestSlot);
 				Settings->SetAimAssistEnabled(true);
 			}
 			Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
@@ -49,7 +49,7 @@ namespace TankTargetingTests
 
 		~FTargetScene()
 		{
-			UGameplayStatics::DeleteGameInSlot(TestSlot, 0);
+			UGameplayStatics::DeleteGameInSlot(TargetingTestSlot, 0);
 		}
 
 		AActor* Current() const
@@ -328,6 +328,8 @@ bool FTankCrosshairTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	// Nothing else holds the widget, so keep it from being garbage collected while the world ticks.
+	const TStrongObjectPtr<UCockpitDisplayWidget> KeepDisplay(Display);
 	Display->SetTargeting(Scene.Targeting);
 
 	auto TargetUV = [&](int32 Bearing)
@@ -451,6 +453,34 @@ bool FTankManualBeyondRangeTest::RunTest(const FString& Parameters)
 	Scene.Tank->SetFallbackInputs(FVector2D::ZeroVector, FVector2D::ZeroVector);
 	Scene.Test.Tick(Scene.Targeting->AutoAcquireAfterManualDelay + 0.5f);
 	TestTrue(TEXT("locks once the stick is let go"), Scene.Current() == Near);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankAimOnSlopeTest, "Tank.Targeting.AimsTrueOnASlope", TankTestFlags)
+bool FTankAimOnSlopeTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
+	{
+		Settings->SetSaveSlotForTesting(TargetingTestSlot);
+		Settings->SetAimAssistEnabled(true);
+	}
+	// Tank parked nose-up on a 20 degree hill, target off to the right at about its own height.
+	Test.SpawnRamp(FVector(-1500, 0, 0), 20.0f);
+	const float GroundZ = 1500.0f * FMath::Tan(FMath::DegreesToRadians(20.0f));
+	ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, GroundZ + 90.0f)));
+	UTankTargetingComponent* Targeting = Tank->GetTargeting();
+	AActor* Target = Test.SpawnTarget(FVector(0, 0, GroundZ + 300.0f) + FRotator(0.0f, 75.0f, 0.0f).Vector() * 3000.0f, TEXT("Side"));
+	Test.Tick(5.0f);
+
+	TestTrue(FString::Printf(TEXT("tank leans with the hill (pitch %.1f)"), Tank->GetActorRotation().Pitch), FMath::Abs(Tank->GetActorRotation().Pitch - 20.0) < 1.5);
+	const UTargetableComponent* Locked = Targeting->GetCurrentTarget();
+	TestTrue(TEXT("target locked"), Locked && Locked->GetOwner() == Target);
+	TestTrue(FString::Printf(TEXT("gun lays on the target (error %.2f deg)"), Targeting->GetAimError()), Targeting->IsOnTarget());
+	const FVector ToTarget = (Target->GetActorLocation() - Targeting->GetAimOrigin()).GetSafeNormal();
+	const float Off = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Targeting->GetAimDirection(), ToTarget), -1.0, 1.0)));
+	TestTrue(FString::Printf(TEXT("the shot would go at it (%.2f deg off)"), Off), Off < 1.0f);
+	UGameplayStatics::DeleteGameInSlot(TargetingTestSlot, 0);
 	return true;
 }
 

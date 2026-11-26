@@ -14,16 +14,50 @@ UTankMovementComponent::UTankMovementComponent()
 void UTankMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bFollowGround && RideHeight <= 0.0f && GetOwner() && GetWorld())
+	AActor* Owner = GetOwner();
+	if (!bFollowGround || !Owner || !GetWorld())
 	{
-		const FVector Start = GetOwner()->GetActorLocation();
-		FHitResult Hit;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(TankRideHeight), false, GetOwner());
-		if (GetWorld()->LineTraceSingleByChannel(Hit, Start, Start - FVector(0.0, 0.0, 5000.0), GroundTraceChannel, Params))
+		return;
+	}
+	if (RideHeight <= 0.0f)
+	{
+		// Use the height the tank was placed at.
+		UpdateGroundIgnores();
+		const FVector Start = Owner->GetActorLocation();
+		float GroundZ = 0.0f;
+		if (TraceGround(Start, 0.0f, 5000.0f, GroundZ))
 		{
-			RideHeight = Start.Z - Hit.ImpactPoint.Z;
+			RideHeight = Start.Z - GroundZ;
 		}
 	}
+	SnapToGround();
+}
+
+void UTankMovementComponent::SnapToGround()
+{
+	AActor* Owner = GetOwner();
+	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
+	if (!Root || !GetWorld() || !bFollowGround || RideHeight <= 0.0f)
+	{
+		return;
+	}
+	UpdateGroundIgnores();
+	FVector Location = Owner->GetActorLocation();
+	float GroundZ = 0.0f;
+	if (!TraceGround(Location, 200.0f, 5000.0f, GroundZ))
+	{
+		return;
+	}
+	const float Yaw = GetHeadingYaw();
+	Location.Z = GroundZ + RideHeight;
+	const FGroundPose Pose = SampleGround(Location, Yaw);
+	if (Pose.bValid)
+	{
+		Location.Z = Pose.Z + RideHeight;
+		GroundNormal = SmoothedNormal = Pose.Normal;
+		GroundSlope = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Pose.Normal.Z, -1.0, 1.0)));
+	}
+	Root->SetWorldLocationAndRotation(Location, MakeHullRotation(Yaw, bTiltWithGround ? SmoothedNormal : FVector::UpVector), false, nullptr, ETeleportType::TeleportPhysics);
 }
 
 void UTankMovementComponent::SetDriveInput(FVector2D RawStick)
@@ -74,63 +108,150 @@ void UTankMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	// Target speed / turn rate, then accelerate toward them
 	TargetSpeed = UTankMovementMath::ComputeTargetSpeed(Tuning, ProcessedInput.X, ProcessedInput.Y);
+	if (bFollowGround && SteepClimbSpeedScale < 1.0f && !FMath::IsNearlyZero(TargetSpeed))
+	{
+		// Slower uphill.
+		const FVector Travel = GetForwardVector() * FMath::Sign(TargetSpeed);
+		const double Grade = -FVector::DotProduct(Travel, GroundNormal) / FMath::Max(GroundNormal.Z, 0.1);
+		if (Grade > 0.0)
+		{
+			const float Climb = FMath::RadiansToDegrees(FMath::Atan(Grade));
+			TargetSpeed *= FMath::Lerp(1.0f, SteepClimbSpeedScale, FMath::Clamp(Climb / MaxClimbAngle, 0.0f, 1.0f));
+		}
+	}
 	CurrentSpeed = UTankMovementMath::StepSpeed(Tuning, CurrentSpeed, TargetSpeed, Dt);
 	const float TargetTurnRate = UTankMovementMath::ComputeTargetTurnRate(Tuning, ProcessedInput.X, CurrentSpeed);
 	CurrentTurnRate = FMath::FInterpConstantTo(CurrentTurnRate, TargetTurnRate, Dt, Tuning.MaximumTurnAcceleration);
 
 	// Move along the mid-step heading (keeps curves the same at any frame rate).
 	const float YawDelta = CurrentTurnRate * Dt;
-	const FQuat CurrentRotation = Root->GetComponentQuat();
-	const FQuat HalfStep = FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDelta * 0.5f)) * CurrentRotation;
-	FVector Forward = HalfStep.RotateVector(LocalForwardAxis.GetSafeNormal());
-	Forward.Z = 0.0;
-	Forward = Forward.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
-
-	const FQuat NewRotation = FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDelta)) * CurrentRotation;
-	const FVector Delta = Forward * CurrentSpeed * Dt;
+	const float Heading = GetHeadingYaw();
+	const FVector Location = Root->GetComponentLocation();
+	const FVector Delta = FRotator(0.0f, Heading + YawDelta * 0.5f, 0.0f).Vector() * CurrentSpeed * Dt;
 
 	UPrimitiveComponent* Hull = Cast<UPrimitiveComponent>(Root);
 	ReleaseGhostedActors(Hull);
 
-	FHitResult Hit;
-	Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
-	for (int32 Attempt = 0; Attempt < 3 && Hit.bStartPenetrating; ++Attempt)
+	FVector TargetLocation = Location + Delta;
+	FQuat TargetRotation = FQuat(FVector::UpVector, FMath::DegreesToRadians(YawDelta)) * Root->GetComponentQuat();
+	bool bGroundBlocked = false;
+	const bool bOnGround = bFollowGround && RideHeight > 0.0f;
+	if (bOnGround)
 	{
-		// Stuck inside something (e.g. an enemy spawned in us). Shallow: push out. Deep: ignore it until we're out.
-		FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
-		PushOut.Z = 0.0;
-		AActor* Other = Hit.GetActor();
-		if (Hit.PenetrationDepth > 0.0f && Hit.PenetrationDepth < 50.0f && !PushOut.IsNearlyZero())
+		UpdateGroundIgnores();
+		const float GroundZ = Location.Z - RideHeight;
+		FGroundPose Pose = SampleGround(TargetLocation, Heading + YawDelta);
+		const float Slope = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Pose.Normal.Z, -1.0, 1.0)));
+		if (!Delta.IsNearlyZero())
 		{
-			Root->MoveComponent(PushOut, CurrentRotation, false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+			// No ground, a ledge, or a climb that is too steep: stay where we are (turning still works).
+			const bool bTooSteep = Slope > MaxClimbAngle && Pose.Z - GroundZ > 0.1 * Delta.Size();
+			bGroundBlocked = !Pose.bValid || bTooSteep || FMath::Abs(Pose.Z - GroundZ) > MaxGroundStep;
 		}
-		else if (Hull && Other && Other != Owner)
+		if (bGroundBlocked || !Pose.bValid)
 		{
-			Hull->IgnoreActorWhenMoving(Other, true);
-			GhostedActors.AddUnique(Other);
+			TargetLocation = Location;
+			Pose = SampleGround(Location, Heading + YawDelta);
 		}
-		else
+		if (Pose.bValid)
 		{
-			break;
+			TargetLocation.Z = Pose.Z + RideHeight;
+			GroundNormal = Pose.Normal;
+			GroundSlope = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Pose.Normal.Z, -1.0, 1.0)));
+			const float Alpha = TiltSpeed > 0.0f ? 1.0f - FMath::Exp(-TiltSpeed * Dt) : 1.0f;
+			SmoothedNormal = FMath::Lerp(SmoothedNormal, GroundNormal, Alpha).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 		}
-		Root->MoveComponent(Delta, NewRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
+		TargetRotation = MakeHullRotation(Heading + YawDelta, bTiltWithGround ? SmoothedNormal : FVector::UpVector);
 	}
-	bBlockedLastFrame = Hit.bBlockingHit && !Hit.bStartPenetrating && !Delta.IsNearlyZero();
+
+	const bool bHitWall = SweepTo(TargetLocation, TargetRotation);
+	if (bHitWall && bOnGround)
+	{
+		// Stopped short of where the ground was measured.
+		FVector Stopped = Root->GetComponentLocation();
+		const FGroundPose Pose = SampleGround(Stopped, Heading + YawDelta);
+		if (Pose.bValid && !FMath::IsNearlyEqual(Stopped.Z, Pose.Z + RideHeight, 0.05))
+		{
+			Stopped.Z = Pose.Z + RideHeight;
+			Root->SetWorldLocation(Stopped, false, nullptr, ETeleportType::None);
+		}
+	}
+	bBlockedLastFrame = (bHitWall || bGroundBlocked) && !Delta.IsNearlyZero();
 	if (bBlockedLastFrame)
 	{
 		// Hit something: stop, don't slide along it.
 		CurrentSpeed = 0.0f;
 	}
 
-	if (bFollowGround)
-	{
-		FollowGround();
-	}
-
 	if (TankDebug::IsMovementDebugEnabled(bDebugDraw))
 	{
 		DrawDebug();
 	}
+}
+
+bool UTankMovementComponent::SweepTo(const FVector& TargetLocation, const FQuat& TargetRotation)
+{
+	AActor* Owner = GetOwner();
+	USceneComponent* Root = Owner->GetRootComponent();
+	UPrimitiveComponent* Hull = Cast<UPrimitiveComponent>(Root);
+	const bool bOnGround = bFollowGround && RideHeight > 0.0f;
+	const float WalkableZ = FMath::Cos(FMath::DegreesToRadians(FMath::Min(MaxClimbAngle + 8.0f, 80.0f)));
+
+	TArray<UPrimitiveComponent*, TInlineAllocator<4>> Ground;
+	bool bBlocked = false;
+	for (int32 Attempt = 0; Attempt < 6; ++Attempt)
+	{
+		FHitResult Hit;
+		Root->MoveComponent(TargetLocation - Root->GetComponentLocation(), TargetRotation, true, &Hit, MOVECOMP_NoFlags, ETeleportType::None);
+		if (!Hit.bBlockingHit)
+		{
+			break;
+		}
+		AActor* Other = Hit.GetActor();
+		UPrimitiveComponent* OtherPart = Hit.GetComponent();
+		const bool bMovable = OtherPart && OtherPart->Mobility == EComponentMobility::Movable;
+		if (Hit.bStartPenetrating && bMovable && Hull && Other && Other != Owner)
+		{
+			// Something moved into us (e.g. an enemy spawned here). Shallow: push out. Deep: ignore it until we're out.
+			FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
+			PushOut.Z = 0.0;
+			if (Hit.PenetrationDepth > 0.0f && Hit.PenetrationDepth < 50.0f && !PushOut.IsNearlyZero())
+			{
+				Root->MoveComponent(PushOut, Root->GetComponentQuat(), false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+			}
+			else
+			{
+				Hull->IgnoreActorWhenMoving(Other, true);
+				GhostedActors.AddUnique(Other);
+			}
+			continue;
+		}
+		const double Up = Hit.bStartPenetrating ? Hit.Normal.Z : Hit.ImpactNormal.Z;
+		if (bOnGround && Hull && OtherPart && Up >= WalkableZ && !Ground.Contains(OtherPart))
+		{
+			// The hull touched the ground itself; the ground checks decide about that, not the sweep.
+			Hull->IgnoreComponentWhenMoving(OtherPart, true);
+			Ground.Add(OtherPart);
+			continue;
+		}
+		if (Hit.bStartPenetrating)
+		{
+			// Inside a wall (turning swung a corner into it): get pushed back out, never through.
+			FVector PushOut = Hit.Normal * (Hit.PenetrationDepth + 1.0);
+			PushOut.Z = 0.0;
+			if (Hit.PenetrationDepth > 0.0f && !PushOut.IsNearlyZero())
+			{
+				Root->MoveComponent(PushOut, Root->GetComponentQuat(), false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+			}
+		}
+		bBlocked = true;
+		break;
+	}
+	for (UPrimitiveComponent* Part : Ground)
+	{
+		Hull->IgnoreComponentWhenMoving(Part, false);
+	}
+	return bBlocked;
 }
 
 void UTankMovementComponent::ReleaseGhostedActors(UPrimitiveComponent* Hull)
@@ -165,28 +286,107 @@ void UTankMovementComponent::ReleaseGhostedActors(UPrimitiveComponent* Hull)
 	}
 }
 
-void UTankMovementComponent::FollowGround()
+void UTankMovementComponent::UpdateGroundIgnores()
 {
-	AActor* Owner = GetOwner();
-	UWorld* World = GetWorld();
-	if (!Owner || !World || RideHeight <= 0.0f)
+	GroundIgnores.Reset();
+	if (AActor* Owner = GetOwner())
 	{
-		return;
+		Owner->GetAttachedActors(GroundIgnores, true, true);
+		GroundIgnores.Add(Owner);
 	}
-	const FVector Location = Owner->GetActorLocation();
-	FHitResult Hit;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(TankGround), false, Owner);
-	TArray<AActor*> Attached;
-	Owner->GetAttachedActors(Attached, true, true);
-	Params.AddIgnoredActors(Attached);
-	if (World->LineTraceSingleByChannel(Hit, Location + FVector(0.0, 0.0, MaxGroundStep), Location - FVector(0.0, 0.0, RideHeight + MaxGroundStep), GroundTraceChannel, Params))
+	for (const TWeakObjectPtr<AActor>& Ghost : GhostedActors)
 	{
-		const float DesiredZ = Hit.ImpactPoint.Z + RideHeight;
-		if (FMath::Abs(DesiredZ - Location.Z) <= MaxGroundStep && !FMath::IsNearlyEqual(DesiredZ, Location.Z, 0.05))
+		if (Ghost.IsValid())
 		{
-			Owner->GetRootComponent()->MoveComponent(FVector(0.0, 0.0, DesiredZ - Location.Z), Owner->GetActorQuat(), false);
+			GroundIgnores.Add(Ghost.Get());
 		}
 	}
+}
+
+bool UTankMovementComponent::TraceGround(const FVector& Point, float Up, float Down, float& OutZ) const
+{
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(TankGround), false);
+	Params.AddIgnoredActors(GroundIgnores);
+	const FVector Start = Point + FVector(0.0, 0.0, Up);
+	const FVector End = Point - FVector(0.0, 0.0, Down);
+	for (int32 Attempt = 0; Attempt < 5; ++Attempt)
+	{
+		FHitResult Hit;
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, Start, End, GroundTraceChannel, Params))
+		{
+			return false;
+		}
+		const UPrimitiveComponent* Part = Hit.GetComponent();
+		if (!Part)
+		{
+			return false;
+		}
+		// Ground is part of the level. Vehicles, wrecks and whatever we started inside are not.
+		if (!Hit.bStartPenetrating && Part->Mobility != EComponentMobility::Movable)
+		{
+			OutZ = static_cast<float>(Hit.ImpactPoint.Z);
+			return true;
+		}
+		Params.AddIgnoredComponent(Part);
+	}
+	return false;
+}
+
+UTankMovementComponent::FGroundPose UTankMovementComponent::SampleGround(const FVector& Center, float HeadingYaw) const
+{
+	FGroundPose Pose;
+	const FVector Ground(Center.X, Center.Y, Center.Z - RideHeight);
+	float CenterZ = 0.0f;
+	if (!TraceGround(Ground, MaxGroundStep, MaxGroundStep, CenterZ))
+	{
+		return Pose;
+	}
+
+	// The four track ends. They may be higher or lower than the middle by as much as a steep slope allows.
+	const FVector Forward = FRotator(0.0f, HeadingYaw, 0.0f).Vector();
+	const FVector Right(-Forward.Y, Forward.X, 0.0);
+	const float Reach = MaxGroundStep + TrackContact.Size() * FMath::Tan(FMath::DegreesToRadians(FMath::Min(MaxClimbAngle + 15.0f, 70.0f)));
+	FVector Corners[4];
+	double Sum = 0.0;
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		const double Front = (Index < 2) ? 1.0 : -1.0;
+		const double Side = (Index % 2 == 0) ? -1.0 : 1.0;
+		Corners[Index] = FVector(Ground.X, Ground.Y, CenterZ) + Forward * (TrackContact.X * Front) + Right * (TrackContact.Y * Side);
+		float Z = CenterZ;
+		if (TraceGround(Corners[Index], Reach, Reach, Z))
+		{
+			Corners[Index].Z = Z;
+		}
+		Sum += Corners[Index].Z;
+	}
+	// Front-left, front-right, back-left, back-right.
+	FVector Normal = FVector::CrossProduct(Corners[1] - Corners[2], Corners[0] - Corners[3]).GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	if (Normal.Z < 0.0)
+	{
+		Normal = -Normal;
+	}
+	Pose.bValid = true;
+	Pose.Normal = Normal;
+	// On a crest the belly rests on it; in a dip the track ends carry the tank.
+	Pose.Z = FMath::Max(CenterZ, static_cast<float>(Sum / 4.0));
+	return Pose;
+}
+
+FQuat UTankMovementComponent::MakeHullRotation(float HeadingYaw, const FVector& Normal) const
+{
+	// Lay the hull on the ground plane without changing where it points on the map.
+	const FVector Axis = LocalForwardAxis.GetSafeNormal2D();
+	const float AxisYaw = Axis.IsNearlyZero() ? 0.0f : FMath::RadiansToDegrees(FMath::Atan2(Axis.Y, Axis.X));
+	FVector X = FRotator(0.0f, HeadingYaw - AxisYaw, 0.0f).Vector();
+	X.Z = -FVector::DotProduct(X, Normal) / FMath::Max(Normal.Z, 0.1);
+	return FRotationMatrix::MakeFromXZ(X, Normal).ToQuat();
+}
+
+float UTankMovementComponent::GetHeadingYaw() const
+{
+	const FVector Forward = GetForwardVector();
+	return FMath::RadiansToDegrees(FMath::Atan2(Forward.Y, Forward.X));
 }
 
 void UTankMovementComponent::DrawDebug() const

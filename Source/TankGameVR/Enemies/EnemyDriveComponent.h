@@ -45,6 +45,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (Units = "Centimeters"))
 	float MaxStepHeight = 50.0f;
 
+	/** Steeper ground than this is a wall when going up (same as the nav mesh). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (ClampMin = "5.0", ClampMax = "60.0", Units = "Degrees"))
+	float MaxClimbAngle = 35.0f;
+
 	/** Most it leans with the ground. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drive", meta = (Units = "Degrees"))
 	float MaxTilt = 15.0f;
@@ -83,6 +87,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Drive")
 	void Freeze();
 
+	/** Puts the vehicle somewhere else, on the ground there. */
+	UFUNCTION(BlueprintCallable, Category = "Drive")
+	void Teleport(FVector Location, FRotator Rotation);
+
 	UFUNCTION(BlueprintPure, Category = "Drive")
 	bool HasGoal() const { return bHasGoal; }
 
@@ -115,7 +123,7 @@ protected:
 private:
 	void UpdatePath();
 	FVector GetSteerTarget();
-	FVector Avoid(const FVector& Desired) const;
+	FVector Avoid(const FVector& Desired);
 	void Drive(float DeltaTime, float TargetYaw, float TargetSpeed);
 	void FollowGround(float DeltaTime);
 
@@ -135,6 +143,9 @@ private:
 	float StuckTime = 0.0f;
 	float RecoverTime = 0.0f;
 	float RecoverTurn = 1.0f;
+	// Which way round a building we are going (0 = not going round anything).
+	int32 DetourSide = 0;
+	double DetourUntil = 0.0;
 	bool bHasGoal = false;
 	bool bArrived = false;
 	bool bFacing = false;

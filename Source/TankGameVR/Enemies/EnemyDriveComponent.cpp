@@ -60,6 +60,18 @@ void UEnemyDriveComponent::Freeze()
 	RecoverTime = 0.0f;
 }
 
+void UEnemyDriveComponent::Teleport(FVector Location, FRotator Rotation)
+{
+	Freeze();
+	bHasGround = false;
+	bStepBlocked = false;
+	bArrived = false;
+	StuckTime = 0.0f;
+	DetourSide = 0;
+	GetOwner()->SetActorLocationAndRotation(Location, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
+	FollowGround(0.0f);
+}
+
 void UEnemyDriveComponent::FaceTowards(FVector Point)
 {
 	FacePoint = Point;
@@ -109,11 +121,37 @@ FVector UEnemyDriveComponent::GetSteerTarget()
 	return Path.IsValidIndex(PathIndex) ? Path[PathIndex] : Goal;
 }
 
-FVector UEnemyDriveComponent::Avoid(const FVector& Desired) const
+FVector UEnemyDriveComponent::Avoid(const FVector& Desired)
 {
 	const AActor* Owner = GetOwner();
 	const FVector Location = Owner->GetActorLocation();
 	FVector Push = FVector::ZeroVector;
+	const double WallZ = FMath::Cos(FMath::DegreesToRadians(MaxClimbAngle));
+
+	// No nav mesh and a building dead ahead: go round it, keeping to the side we picked until the way is clear.
+	if (!bNavPath && FeelerLength > 0.0f && !Desired.IsNearlyZero())
+	{
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (Now > DetourUntil)
+		{
+			DetourSide = 0;
+		}
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(EnemyDetour), false, Owner);
+		const FVector Start = Location + FVector(0, 0, 150);
+		FHitResult Hit;
+		if (GetWorld()->SweepSingleByChannel(Hit, Start, Start + Desired * (FeelerLength * 1.5f), FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(40.0f), Params)
+			&& !Hit.bStartPenetrating && Hit.ImpactNormal.Z < WallZ && Hit.GetComponent() && Hit.GetComponent()->Mobility != EComponentMobility::Movable)
+		{
+			const FVector Away = Hit.ImpactNormal.GetSafeNormal2D();
+			FVector Along = FVector::CrossProduct(FVector::UpVector, Away);
+			if (DetourSide == 0)
+			{
+				DetourSide = FVector::DotProduct(Along, Owner->GetActorForwardVector()) >= 0.0 ? 1 : -1;
+			}
+			DetourUntil = Now + 2.0;
+			return (Along * DetourSide + Away * (0.5 * (1.0 - Hit.Time))).GetSafeNormal2D();
+		}
+	}
 
 	// Keep apart from the others.
 	for (const TWeakObjectPtr<UEnemyDriveComponent>& Other : GDrivers)
@@ -142,7 +180,7 @@ FVector UEnemyDriveComponent::Avoid(const FVector& Desired) const
 			const FVector Start = Location + Right * (HalfWidth * Side) + FVector(0, 0, 40);
 			const FVector Dir = (Forward + Right * (0.35f * Side)).GetSafeNormal();
 			FHitResult Hit;
-			if (GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + Dir * Length, ECC_Visibility, Params) && Hit.ImpactNormal.Z < 0.7)
+			if (GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + Dir * Length, ECC_Visibility, Params) && Hit.ImpactNormal.Z < WallZ)
 			{
 				Push -= Right * Side * (1.0f - Hit.Time) * 2.0f;
 			}
@@ -187,9 +225,17 @@ void UEnemyDriveComponent::Drive(float DeltaTime, float TargetYaw, float TargetS
 	Owner->AddActorWorldOffset(Delta, true, &Hit);
 	if (Hit.bBlockingHit)
 	{
-		// Slide along what we hit.
-		const FVector Slide = FVector::VectorPlaneProject(Delta * (1.0f - Hit.Time), Hit.Normal) * FVector(1, 1, 0);
-		Owner->AddActorWorldOffset(Slide, true);
+		const FVector Rest = Delta * (1.0f - Hit.Time);
+		if (Hit.ImpactNormal.Z >= FMath::Cos(FMath::DegreesToRadians(MaxClimbAngle)))
+		{
+			// Only the hill we are climbing; FollowGround lifts us onto it.
+			Owner->AddActorWorldOffset(Rest, false);
+		}
+		else
+		{
+			// Slide along what we hit.
+			Owner->AddActorWorldOffset(FVector::VectorPlaneProject(Rest, Hit.Normal) * FVector(1, 1, 0), true);
+		}
 	}
 	const FVector Moved = Owner->GetActorLocation() - Start;
 	Velocity = DeltaTime > 0.0f ? Moved / DeltaTime : FVector::ZeroVector;
@@ -217,9 +263,11 @@ void UEnemyDriveComponent::FollowGround(float DeltaTime)
 	FHitResult Hit;
 	if (GetWorld()->LineTraceSingleByObjectType(Hit, Location + FVector(0, 0, 150), Location - FVector(0, 0, 1000), Objects, Params))
 	{
-		if (bHasGround && DeltaTime > 0.0f && Hit.ImpactPoint.Z - GroundZ > MaxStepHeight)
+		const double Rise = Hit.ImpactPoint.Z - GroundZ;
+		const bool bTooSteep = Hit.ImpactNormal.Z < FMath::Cos(FMath::DegreesToRadians(MaxClimbAngle)) && Rise > 0.1 * FVector::Dist2D(Location, PreMoveLocation);
+		if (bHasGround && DeltaTime > 0.0f && (Rise > MaxStepHeight || bTooSteep))
 		{
-			// Too high to climb (rubble, rocks): treat it as a wall.
+			// Too high or too steep to climb (rubble, rocks, a cliff): treat it as a wall.
 			Owner->SetActorLocation(PreMoveLocation);
 			Velocity = FVector::ZeroVector;
 			bStepBlocked = true;
@@ -269,6 +317,8 @@ void UEnemyDriveComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		StuckTime = 0.0f;
 		RecoverTime = 1.6f;
 		RecoverTurn = FMath::RandBool() ? 1.0f : -1.0f;
+		// Going round that way did not work; try the other.
+		DetourSide = -DetourSide;
 		CurrentSpeed = 0.0f;
 		return;
 	}
