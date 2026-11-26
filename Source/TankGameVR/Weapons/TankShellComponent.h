@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Cockpit/CockpitGrabbableComponent.h"
+#include "Combat/TankDamageTypes.h"
 #include "TankShellComponent.generated.h"
 
 /**
@@ -15,6 +16,9 @@ class TANKGAMEVR_API UTankShellComponent : public UCockpitGrabbableComponent
 
 public:
 	UTankShellComponent();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell")
+	ETankRoundType RoundType = ETankRoundType::AP;
 
 	/** Pivot to nose tip. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shell", meta = (ClampMin = "1.0", Units = "Centimeters"))

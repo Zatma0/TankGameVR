@@ -9,6 +9,13 @@ void UTargetSelectionMath::RelativeYawPitch(const FVector& Reference, const FVec
 	OutPitch = FRotator::NormalizeAxis(DirRot.Pitch - RefRot.Pitch);
 }
 
+void UTargetSelectionMath::LocalYawPitch(const FQuat& Frame, const FVector& Direction, float& OutYaw, float& OutPitch)
+{
+	const FVector Local = Frame.UnrotateVector(Direction.GetSafeNormal());
+	OutYaw = FMath::RadiansToDegrees(FMath::Atan2(Local.Y, Local.X));
+	OutPitch = FMath::RadiansToDegrees(FMath::Atan2(Local.Z, FVector2D(Local.X, Local.Y).Size()));
+}
+
 void UTargetSelectionMath::EvaluateCandidate(FTargetCandidate& Candidate, const FVector& Origin, const FVector& ReferenceDirection,
 	const FVector& SightForward, const FTargetSelectionTuning& Tuning)
 {

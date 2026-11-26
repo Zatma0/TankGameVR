@@ -109,6 +109,9 @@ public:
 
 	/** Yaw (right +) and pitch (up +) of Direction relative to Reference. */
 	static void RelativeYawPitch(const FVector& Reference, const FVector& Direction, float& OutYaw, float& OutPitch);
+
+	/** Yaw and pitch of Direction as seen from Frame. Unlike RelativeYawPitch this stays right when Frame leans. */
+	static void LocalYawPitch(const FQuat& Frame, const FVector& Direction, float& OutYaw, float& OutPitch);
 };
 
 UCLASS()

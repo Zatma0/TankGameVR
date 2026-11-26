@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Combat/TankDamageTypes.h"
 #include "TankBreechComponent.generated.h"
 
 class UHapticFeedbackEffect_Base;
@@ -113,17 +114,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Casing", meta = (ClampMin = "0.0", Units = "Seconds"))
 	float CasingLifetime = 3.0f;
 
+	/** The round scraping into the chamber (as it is caught, or when an auto load starts). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<USoundBase> CaptureSound;
 
+	/** The round sliding home. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> SeatSound;
+
+	/** The wedge shut: played on the frame it has closed. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<USoundBase> CloseSound;
 
+	/** The ready lamp coming on. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
-	float CloseSoundPitch = 1.8f;
+	TSoftObjectPtr<USoundBase> ReadySound;
+
+	/** The breech dropping open after the recoil. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> OpenSound;
+
+	/** The case stub hitting the floor: played on the frame it lands. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	TSoftObjectPtr<USoundBase> CasingSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
-	float CloseSoundVolume = 0.35f;
+	float CloseSoundPitch = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
+	float CloseSoundVolume = 0.85f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Breech|Feedback")
 	TSoftObjectPtr<UHapticFeedbackEffect_Base> ClickHaptic;
@@ -148,6 +167,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Breech")
 	FString GetStatusText() const;
 
+	/** Type of the round in the breech (or the last one loaded). */
+	UFUNCTION(BlueprintPure, Category = "Breech")
+	ETankRoundType GetLoadedRoundType() const { return LoadedType; }
+
 	/** Spends the loaded round. Returns false if not loaded. */
 	UFUNCTION(BlueprintCallable, Category = "Breech")
 	bool Fire();
@@ -156,6 +179,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Breech")
 	bool AutoLoad();
 
+	/** Same, but only takes a round of this type. */
+	UFUNCTION(BlueprintCallable, Category = "Breech")
+	bool AutoLoadType(ETankRoundType Type);
+
+	/** Rack rounds of this type ready to use. */
+	UFUNCTION(BlueprintPure, Category = "Breech")
+	int32 CountAvailable(ETankRoundType Type) const;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
@@ -163,6 +194,7 @@ protected:
 
 private:
 	void SetState(ETankBreechState NewState);
+	bool StartAutoLoad(UTankShellComponent* Round);
 	void TryCapture();
 	void UpdateRamming();
 	void UpdateAutoLoading();
@@ -190,6 +222,7 @@ private:
 
 	TWeakObjectPtr<UTankShellComponent> Shell;
 	ETankBreechState State = ETankBreechState::Open;
+	ETankRoundType LoadedType = ETankRoundType::AP;
 	FTransform RestRelativeTransform;
 	FTransform AutoStartInBreech;
 	FVector BlockClosedLocation = FVector::ZeroVector;
@@ -201,4 +234,5 @@ private:
 	float BlockAlpha = 0.0f;
 	float CasingRemaining = 0.0f;
 	bool bCasingFlying = false;
+	bool bCasingLanded = false;
 };

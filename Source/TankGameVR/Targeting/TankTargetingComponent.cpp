@@ -376,10 +376,9 @@ void UTankTargetingComponent::UpdateManualAim(float DeltaTime)
 
 void UTankTargetingComponent::SyncManualAnglesToAim()
 {
-	const FVector SightForward = GetSightTransform().GetRotation().GetForwardVector();
 	float Yaw = 0.0f;
 	float Pitch = 0.0f;
-	UTargetSelectionMath::RelativeYawPitch(SightForward, GetAimDirection(), Yaw, Pitch);
+	UTargetSelectionMath::LocalYawPitch(GetSightTransform().GetRotation(), GetAimDirection(), Yaw, Pitch);
 	ManualYaw = FMath::Clamp(Yaw, -ManualYawLimit, ManualYawLimit);
 	ManualPitch = FMath::Clamp(Pitch, ManualPitchRange.X, ManualPitchRange.Y);
 }
@@ -428,8 +427,7 @@ void UTankTargetingComponent::UpdateAim(float DeltaTime)
 	// Turret turns at its own speed; sight and shot follow the gun.
 	float GoalYaw = 0.0f;
 	float GoalPitch = 0.0f;
-	const FVector SightForward = Sight.GetRotation().GetForwardVector();
-	UTargetSelectionMath::RelativeYawPitch(SightForward, Desired.GetForwardVector(), GoalYaw, GoalPitch);
+	UTargetSelectionMath::LocalYawPitch(Sight.GetRotation(), Desired.GetForwardVector(), GoalYaw, GoalPitch);
 	GoalPitch = FMath::Clamp(GoalPitch, ManualPitchRange.X, ManualPitchRange.Y);
 
 	TurretYaw = FRotator::NormalizeAxis(DriveAxis(TurretYaw, FMath::FindDeltaAngleDegrees(TurretYaw, GoalYaw), TurretYawSpeed,
@@ -439,24 +437,28 @@ void UTankTargetingComponent::UpdateAim(float DeltaTime)
 	FQuat Next = Sight.GetRotation() * FRotator(GunPitch, TurretYaw, 0.0f).Quaternion();
 	Next.Normalize();
 	AimRotation = Next.ContainsNaN() ? Desired : Next;
-	AimError = FMath::RadiansToDegrees(AimRotation.AngularDistance(Desired));
+	// Only where the gun points counts; on a slope it is also rolled against the horizon.
+	AimError = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(AimRotation.GetForwardVector(), Desired.GetForwardVector()), -1.0, 1.0)));
 }
 
 void UTankTargetingComponent::UpdateTurretVisuals() const
 {
 	const FVector Aim = GetAimDirection();
+	float Yaw = 0.0f;
+	float Pitch = 0.0f;
 	if (TurretComponent)
 	{
-		FRotator TurretRotation = TurretComponent->GetComponentRotation();
-		TurretRotation.Yaw = Aim.Rotation().Yaw;
-		TurretComponent->SetWorldRotation(TurretRotation);
+		// Turn in the hull's own plane, so the turret stays seated when the tank leans.
+		const USceneComponent* Parent = TurretComponent->GetAttachParent();
+		UTargetSelectionMath::LocalYawPitch(Parent ? Parent->GetComponentQuat() : GetOwner()->GetActorQuat(), Aim, Yaw, Pitch);
+		FRotator TurretRotation = TurretComponent->GetRelativeRotation();
+		TurretRotation.Yaw = Yaw;
+		TurretComponent->SetRelativeRotation(TurretRotation);
 	}
 	if (BarrelComponent)
 	{
-		float Yaw = 0.0f;
-		float Pitch = 0.0f;
 		const USceneComponent* Parent = BarrelComponent->GetAttachParent();
-		UTargetSelectionMath::RelativeYawPitch(Parent ? Parent->GetForwardVector() : GetOwner()->GetActorForwardVector(), Aim, Yaw, Pitch);
+		UTargetSelectionMath::LocalYawPitch(Parent ? Parent->GetComponentQuat() : GetOwner()->GetActorQuat(), Aim, Yaw, Pitch);
 		BarrelComponent->SetRelativeRotation(FRotator(Pitch, 0.0f, 0.0f));
 	}
 }

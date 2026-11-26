@@ -186,16 +186,17 @@ bool FTankAutoLoadTest::RunTest(const FString& Parameters)
 	Gun.Test.Tick(Gun.Breech->AutoLoadTime + Gun.Breech->CloseTime + 0.2f);
 	TestTrue(TEXT("loaded without hands"), Gun.Breech->IsLoaded());
 
+	const int32 Rounds = Gun.Tank->GetShells().Num();
 	int32 Fired = 0;
-	for (int32 Shot = 0; Shot < 3; ++Shot)
+	for (int32 Shot = 0; Shot < Rounds; ++Shot)
 	{
 		Fired += Gun.Tank->Fire() ? 1 : 0;
 		Gun.Test.Tick(0.8f);
 		Gun.Breech->AutoLoad();
 		Gun.Test.Tick(Gun.Breech->AutoLoadTime + Gun.Breech->CloseTime + 0.2f);
 	}
-	TestEqual(TEXT("three rounds from the rack"), Fired, 3);
-	TestEqual(TEXT("shots counted"), Gun.Tank->GetCannon()->GetShotsFired(), 3);
+	TestEqual(TEXT("every round in the rack"), Fired, Rounds);
+	TestEqual(TEXT("shots counted"), Gun.Tank->GetCannon()->GetShotsFired(), Rounds);
 	TestFalse(TEXT("rack is empty until it refills"), Gun.Breech->IsLoaded());
 	TestTrue(TEXT("display says refilling"), Gun.Breech->GetStatusText().Contains(TEXT("REFILLING")));
 	return true;

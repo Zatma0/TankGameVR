@@ -15,14 +15,17 @@ public class TankGameVR : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"UMG",
-			"HeadMountedDisplay"
+			"HeadMountedDisplay",
+			"NavigationSystem",
+			"CableComponent"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"Slate",
 			"XRBase",
-			"SlateCore"
+			"SlateCore",
+			"AudioMixer"
 		});
 
 		// Editor-only helpers used by the content setup scripts (Testing/TankEditorUtils).

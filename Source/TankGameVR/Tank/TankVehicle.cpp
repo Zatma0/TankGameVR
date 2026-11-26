@@ -1,7 +1,18 @@
 #include "Tank/TankVehicle.h"
 #include "Tank/TankMovementComponent.h"
+#include "Tank/TankVisionConeComponent.h"
+#include "Audio/TankAudioComponent.h"
 #include "Cockpit/CockpitCigaretteComponent.h"
+#include "Cockpit/CockpitExtinguisherComponent.h"
+#include "Cockpit/CockpitFireComponent.h"
+#include "Cockpit/CockpitGrabUtils.h"
 #include "Cockpit/CockpitJoystickComponent.h"
+#include "Cockpit/CockpitSmokeLauncherComponent.h"
+#include "Cockpit/CockpitRadioComponent.h"
+#include "Cockpit/CockpitCableJoltComponent.h"
+#include "CableComponent.h"
+#include "Combat/TankDamageReactionComponent.h"
+#include "Combat/TankHealthComponent.h"
 #include "Weapons/TankBreechComponent.h"
 #include "Weapons/TankCannonComponent.h"
 #include "Weapons/TankShellComponent.h"
@@ -34,14 +45,18 @@ ATankVehicle::ATankVehicle()
 	HullCollision->SetBoxExtent(FVector(300.0, 160.0, 50.0));
 	HullCollision->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
 	HullCollision->SetMobility(EComponentMobility::Movable);
+	// We drive around, so don't carve the nav mesh the enemies use.
+	HullCollision->SetCanEverAffectNavigation(false);
 	SetRootComponent(HullCollision);
 
 	TankMovement = CreateDefaultSubobject<UTankMovementComponent>(TEXT("TankMovement"));
+	TankMovement->RideHeight = 90.0f;
 	Targeting = CreateDefaultSubobject<UTankTargetingComponent>(TEXT("Targeting"));
 
 	TurretPivot = CreateDefaultSubobject<USceneComponent>(TEXT("TurretPivot"));
 	TurretPivot->SetupAttachment(HullCollision);
-	TurretPivot->SetRelativeLocation(FVector(-60.0, 0.0, 80.0));
+	// High enough that the gun swings over the driver's head, not through the open cockpit.
+	TurretPivot->SetRelativeLocation(FVector(-60.0, 0.0, 150.0));
 
 	BarrelPivot = CreateDefaultSubobject<USceneComponent>(TEXT("BarrelPivot"));
 	BarrelPivot->SetupAttachment(TurretPivot);
@@ -92,22 +107,74 @@ ATankVehicle::ATankVehicle()
 	Breech->SetupAttachment(CockpitRoot);
 	Breech->SetRelativeLocation(FVector(22.0, -56.0, 64.0));
 
-	auto MakeRound = [this](const TCHAR* Name, int32 Slot)
+	// Two AP rounds on top, two HE rounds below.
+	auto MakeRound = [this](const TCHAR* Name, int32 Slot, ETankRoundType Type)
 	{
 		UTankShellComponent* Round = CreateDefaultSubobject<UTankShellComponent>(Name);
 		Round->SetupAttachment(CockpitRoot);
-		Round->SetRelativeLocation(FVector(-30.0, -56.0, 45.0 + 15.0 * Slot));
+		Round->SetRelativeLocation(FVector(-30.0, -56.0, 87.0 - 14.0 * Slot));
+		Round->RoundType = Type;
 		return Round;
 	};
-	ShellA = MakeRound(TEXT("ShellA"), 0);
-	ShellB = MakeRound(TEXT("ShellB"), 1);
-	ShellC = MakeRound(TEXT("ShellC"), 2);
+	ShellA = MakeRound(TEXT("ShellA"), 0, ETankRoundType::AP);
+	ShellB = MakeRound(TEXT("ShellB"), 1, ETankRoundType::AP);
+	ShellC = MakeRound(TEXT("ShellC"), 2, ETankRoundType::HE);
+	ShellD = MakeRound(TEXT("ShellD"), 3, ETankRoundType::HE);
 
 	// On the ashtray, right side of the dashboard.
 	Cigarette = CreateDefaultSubobject<UCockpitCigaretteComponent>(TEXT("Cigarette"));
 	Cigarette->SetupAttachment(CockpitRoot);
 	Cigarette->SetRelativeLocation(FVector(62.0, 40.0, 86.0));
 	Cigarette->SetRelativeRotation(FRotator(0.0, 25.0, 0.0));
+
+	// Extinguisher on a bracket on the right wall, nozzle forward.
+	Extinguisher = CreateDefaultSubobject<UCockpitExtinguisherComponent>(TEXT("Extinguisher"));
+	Extinguisher->SetupAttachment(CockpitRoot);
+	Extinguisher->SetRelativeLocation(FVector(-8.0, 48.0, 62.0));
+
+	// Guarded smoke switch, left side of the dashboard.
+	SmokeLauncher = CreateDefaultSubobject<UCockpitSmokeLauncherComponent>(TEXT("SmokeLauncher"));
+	SmokeLauncher->SetupAttachment(CockpitRoot);
+	SmokeLauncher->SetRelativeLocation(FVector(64.0, -50.0, 83.0));
+
+	// Radio set on the right wall ahead of the extinguisher; the handset hangs on its hook, the cord droops under it.
+	Radio = CreateDefaultSubobject<UCockpitRadioComponent>(TEXT("Radio"));
+	Radio->SetupAttachment(CockpitRoot);
+	Radio->SetRelativeLocation(FVector(20.0, 50.0, 82.0));
+	RadioCable = CreateDefaultSubobject<UCableComponent>(TEXT("RadioCable"));
+	RadioCable->SetupAttachment(CockpitRoot);
+	RadioCable->SetRelativeLocation(FVector(20.0, 54.0, 71.0));
+	RadioCable->bAttachEnd = true;
+	RadioCable->EndLocation = FVector(0.0, 0.0, -9.0);
+	RadioCable->CableLength = 50.0f;
+	RadioCable->NumSegments = 14;
+	RadioCable->SolverIterations = 4;
+	RadioCable->CableWidth = 1.2f;
+	RadioCable->NumSides = 6;
+	RadioCable->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CableJolt = CreateDefaultSubobject<UCockpitCableJoltComponent>(TEXT("CableJolt"));
+
+	// Where hits start fires: under the dashboard, in front of the ammo rack, the cable loom on the right wall.
+	auto MakeFireSpot = [this](const TCHAR* Name, const FVector& Location)
+	{
+		UCockpitFireComponent* Spot = CreateDefaultSubobject<UCockpitFireComponent>(Name);
+		Spot->SetupAttachment(CockpitRoot);
+		Spot->SetRelativeLocation(Location);
+		return Spot;
+	};
+	FireSpotA = MakeFireSpot(TEXT("FireSpotA"), FVector(58.0, -12.0, 3.0));
+	FireSpotB = MakeFireSpot(TEXT("FireSpotB"), FVector(20.0, -74.0, 3.0));
+	FireSpotC = MakeFireSpot(TEXT("FireSpotC"), FVector(25.0, 55.0, 40.0));
+
+	Health = CreateDefaultSubobject<UTankHealthComponent>(TEXT("Health"));
+	Health->MaxHealth = 100.0f;
+	// The crew patches the hull up slowly whenever the tank is left alone for a moment.
+	Health->RepairPerSecond = 2.0f;
+	Health->RepairDelay = 6.0f;
+	Health->bDestroyOwnerOnDeath = false;
+	DamageReaction = CreateDefaultSubobject<UTankDamageReactionComponent>(TEXT("DamageReaction"));
+	VisionCone = CreateDefaultSubobject<UTankVisionConeComponent>(TEXT("VisionCone"));
+	Sounds = CreateDefaultSubobject<UTankAudioComponent>(TEXT("Sounds"));
 
 	// Overview camera behind and above the hull.
 	OverviewArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("OverviewArm"));
@@ -134,6 +201,9 @@ void ATankVehicle::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// After every component has started, so nothing re-ties it: the cord ends on the handset.
+	RadioCable->SetAttachEndToComponent(Radio);
+
 	// Tick order: sticks -> tank -> movement -> targeting
 	AddTickPrerequisiteComponent(DriveStick);
 	AddTickPrerequisiteComponent(AimStick);
@@ -147,17 +217,43 @@ void ATankVehicle::BeginPlay()
 	{
 		DisplayWidget->SetTargeting(Targeting);
 		DisplayWidget->SetBreech(Breech);
+		DisplayWidget->SetTank(this);
 	}
 }
 
 TArray<UTankShellComponent*> ATankVehicle::GetShells() const
 {
-	return { ShellA, ShellB, ShellC };
+	return { ShellA, ShellB, ShellC, ShellD };
+}
+
+TArray<UCockpitFireComponent*> ATankVehicle::GetFireSpots() const
+{
+	return { FireSpotA, FireSpotB, FireSpotC };
+}
+
+bool ATankVehicle::IsDestroyed() const
+{
+	return Health && Health->IsDead();
 }
 
 bool ATankVehicle::Fire()
 {
-	return Cannon->Fire();
+	return !IsDestroyed() && Cannon->Fire();
+}
+
+void ATankVehicle::HandleTrigger(bool bLeftHand, bool bPressed)
+{
+	// The hand holding the extinguisher sprays with its trigger instead of firing the gun.
+	const EControllerHand Side = bLeftHand ? EControllerHand::Left : EControllerHand::Right;
+	if (Extinguisher->IsHeld() && Extinguisher->GetHand() && CockpitGrab::GetHandSide(Extinguisher->GetHand()) == Side)
+	{
+		Extinguisher->SetSpraying(bPressed);
+		return;
+	}
+	if (bPressed)
+	{
+		Fire();
+	}
 }
 
 void ATankVehicle::OnFire(const FInputActionValue& Value)
@@ -167,7 +263,40 @@ void ATankVehicle::OnFire(const FInputActionValue& Value)
 
 void ATankVehicle::OnAutoLoad(const FInputActionValue& Value)
 {
-	Breech->AutoLoad();
+	// R loads AP; if there is none left, whatever is there.
+	if (!Breech->AutoLoadType(ETankRoundType::AP))
+	{
+		Breech->AutoLoad();
+	}
+}
+
+void ATankVehicle::OnLoadHE(const FInputActionValue& Value)
+{
+	if (!Breech->AutoLoadType(ETankRoundType::HE))
+	{
+		Breech->AutoLoad();
+	}
+}
+
+void ATankVehicle::OnSmoke(const FInputActionValue& Value)
+{
+	if (!IsDestroyed())
+	{
+		SmokeLauncher->Launch();
+	}
+}
+
+void ATankVehicle::OnExtinguish(const FInputActionValue& Value)
+{
+	Extinguisher->AutoSpray();
+}
+
+void ATankVehicle::OnRadio(const FInputActionValue& Value)
+{
+	if (!IsDestroyed())
+	{
+		Radio->Answer();
+	}
 }
 
 void ATankVehicle::OnToggleAimAssist(const FInputActionValue& Value)
@@ -259,6 +388,33 @@ void ATankVehicle::HandleBoarded(APawn* Pawn)
 	{
 		EnhancedInput->BindAction(ToggleAimAssistAction, ETriggerEvent::Started, this, &ATankVehicle::OnToggleAimAssist);
 	}
+	if (LoadHEAction)
+	{
+		EnhancedInput->BindAction(LoadHEAction, ETriggerEvent::Started, this, &ATankVehicle::OnLoadHE);
+	}
+	if (SmokeAction)
+	{
+		EnhancedInput->BindAction(SmokeAction, ETriggerEvent::Started, this, &ATankVehicle::OnSmoke);
+	}
+	if (ExtinguishAction)
+	{
+		// Triggered, so holding the key keeps it spraying.
+		EnhancedInput->BindAction(ExtinguishAction, ETriggerEvent::Triggered, this, &ATankVehicle::OnExtinguish);
+	}
+	if (RadioAction)
+	{
+		EnhancedInput->BindAction(RadioAction, ETriggerEvent::Started, this, &ATankVehicle::OnRadio);
+	}
+	if (TriggerLeftAction)
+	{
+		EnhancedInput->BindAction(TriggerLeftAction, ETriggerEvent::Started, this, &ATankVehicle::OnTriggerLeftPressed);
+		EnhancedInput->BindAction(TriggerLeftAction, ETriggerEvent::Completed, this, &ATankVehicle::OnTriggerLeftReleased);
+	}
+	if (TriggerRightAction)
+	{
+		EnhancedInput->BindAction(TriggerRightAction, ETriggerEvent::Started, this, &ATankVehicle::OnTriggerRightPressed);
+		EnhancedInput->BindAction(TriggerRightAction, ETriggerEvent::Completed, this, &ATankVehicle::OnTriggerRightReleased);
+	}
 }
 
 void ATankVehicle::OnToggleView(const FInputActionValue& Value)
@@ -341,8 +497,14 @@ void ATankVehicle::Tick(float DeltaSeconds)
 	// Held stick wins over the thumbstick.
 	DriveStick->SetExternalValue(FallbackDrive);
 	AimStick->SetExternalValue(FallbackAim);
-	const FVector2D Drive = DriveStick->IsHeld() ? DriveStick->GetValue() : FallbackDrive;
-	const FVector2D Aim = AimStick->IsHeld() ? AimStick->GetValue() : FallbackAim;
+	FVector2D Drive = DriveStick->IsHeld() ? DriveStick->GetValue() : FallbackDrive;
+	FVector2D Aim = AimStick->IsHeld() ? AimStick->GetValue() : FallbackAim;
+	if (IsDestroyed())
+	{
+		// Knocked out: engine and turret dead until the restart.
+		Drive = FVector2D::ZeroVector;
+		Aim = FVector2D::ZeroVector;
+	}
 
 	TankMovement->SetDriveInput(Drive);
 	Targeting->SetAimInput(Aim);

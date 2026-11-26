@@ -228,4 +228,91 @@ bool FTankOverlapEscapeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankHillTest, "Tank.Movement.ClimbsHillsNotCliffs", TankTestFlags)
+bool FTankHillTest::RunTest(const FString& Parameters)
+{
+	// A 15 degree hill starting 6 m ahead: the tank drives up it and leans with it.
+	{
+		FWorld Test;
+		Test.SpawnRamp(FVector(600, 0, 0), 15.0f);
+		ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
+		UTankMovementComponent* Movement = Tank->GetTankMovement();
+		Test.Tick(0.1f);
+		Tank->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+		Test.Tick(7.0f);
+		const FVector End = Tank->GetActorLocation();
+		const double Expected = (End.X - 600.0) * FMath::Tan(FMath::DegreesToRadians(15.0)) + 90.0;
+		TestTrue(FString::Printf(TEXT("drove onto the hill (x %.0f)"), End.X), End.X > 1500.0);
+		TestTrue(FString::Printf(TEXT("stays on the surface (z %.1f, expected %.1f)"), End.Z, Expected), FMath::Abs(End.Z - Expected) < 3.0);
+		TestTrue(FString::Printf(TEXT("hull leans with the hill (pitch %.1f)"), Tank->GetActorRotation().Pitch), FMath::Abs(Tank->GetActorRotation().Pitch - 15.0) < 1.5);
+		TestTrue(FString::Printf(TEXT("slope reported (%.1f)"), Movement->GetGroundSlope()), FMath::Abs(Movement->GetGroundSlope() - 15.0f) < 1.0f);
+		TestTrue(FString::Printf(TEXT("still heading straight (y %.2f, yaw %.2f)"), End.Y, Tank->GetActorRotation().Yaw), FMath::Abs(End.Y) < 1.0 && FMath::Abs(Tank->GetActorRotation().Yaw) < 0.1);
+		TestTrue(FString::Printf(TEXT("slower uphill, but moving (%.0f of %.0f cm/s)"), Movement->CurrentSpeed, Movement->Tuning.MaximumForwardSpeed),
+			Movement->CurrentSpeed < Movement->Tuning.MaximumForwardSpeed - 20.0f && Movement->CurrentSpeed > 100.0f);
+
+		// Hull kept level if the lean is switched off; it still climbs.
+		Movement->bTiltWithGround = false;
+		Test.Tick(1.0f);
+		TestTrue(FString::Printf(TEXT("level hull keeps climbing (x %.0f, pitch %.1f)"), Tank->GetActorLocation().X, Tank->GetActorRotation().Pitch),
+			Tank->GetActorLocation().X > End.X + 100.0 && FMath::Abs(Tank->GetActorRotation().Pitch) < 0.5);
+	}
+
+	// A 45 degree bank: the tank stops at it and can back away again.
+	{
+		FWorld Test;
+		Test.SpawnRamp(FVector(600, 0, 0), 45.0f);
+		ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
+		Test.Tick(0.1f);
+		Tank->SetFallbackInputs(FVector2D(0.0, 1.0), FVector2D::ZeroVector);
+		Test.Tick(8.0f);
+		const FVector Stopped = Tank->GetActorLocation();
+		TestTrue(FString::Printf(TEXT("does not climb a bank that is too steep (x %.0f, z %.0f)"), Stopped.X, Stopped.Z), Stopped.X < 800.0 && Stopped.Z < 250.0);
+		TestTrue(TEXT("counts as blocked"), Tank->GetTankMovement()->bBlockedLastFrame);
+		Tank->SetFallbackInputs(FVector2D(0.0, -1.0), FVector2D::ZeroVector);
+		Test.Tick(4.0f);
+		TestTrue(FString::Printf(TEXT("backs away again (x %.0f)"), Tank->GetActorLocation().X), Tank->GetActorLocation().X < Stopped.X - 150.0);
+	}
+
+	// Dropped in above the ground: it lands on it.
+	{
+		FWorld Test;
+		ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 400)));
+		Test.Tick(0.1f);
+		TestTrue(FString::Printf(TEXT("placed too high, sits on the ground anyway (z %.1f)"), Tank->GetActorLocation().Z), FMath::Abs(Tank->GetActorLocation().Z - 90.0) < 1.0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankBuildingTest, "Tank.Movement.NeverThroughBuildings", TankTestFlags)
+bool FTankBuildingTest::RunTest(const FString& Parameters)
+{
+	// A building face at x = 750. Push against it for a long time while steering both ways.
+	FWorld Test;
+	Test.SpawnStaticBlock(FVector(800, 0, 150), FVector(1, 30, 3));
+	ATankVehicle* Tank = Test.World->SpawnActor<ATankVehicle>(ATankVehicle::StaticClass(), FTransform(FVector(0, 0, 90)));
+	Test.Tick(0.1f);
+
+	const float Dt = 1.0f / 90.0f;
+	double MaxX = 0.0;
+	float Turned = 0.0f;
+	float PreviousYaw = Tank->GetActorRotation().Yaw;
+	const FVector2D Sticks[] = { FVector2D(0.0, 1.0), FVector2D(1.0, 1.0), FVector2D(-1.0, 1.0), FVector2D(0.2, 1.0), FVector2D(1.0, 0.3) };
+	for (const FVector2D& Stick : Sticks)
+	{
+		Tank->SetFallbackInputs(Stick, FVector2D::ZeroVector);
+		for (float Time = 0.0f; Time < 6.0f; Time += Dt)
+		{
+			Test.Wrapper.TickTestWorld(Dt);
+			MaxX = FMath::Max(MaxX, Tank->GetActorLocation().X);
+			const float Yaw = Tank->GetActorRotation().Yaw;
+			Turned += FMath::Abs(FRotator::NormalizeAxis(Yaw - PreviousYaw));
+			PreviousYaw = Yaw;
+		}
+	}
+	// Half the hull width (160) is the closest the middle of the tank can get.
+	TestTrue(FString::Printf(TEXT("never gets into the building (closest x %.0f, face at 750)"), MaxX), MaxX < 620.0);
+	TestTrue(FString::Printf(TEXT("it did turn against the wall (%.0f deg)"), Turned), Turned > 20.0f);
+	return true;
+}
+
 #endif

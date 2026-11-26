@@ -1,11 +1,16 @@
 #include "Weapons/TankShellProjectile.h"
+#include "Audio/TankAudio.h"
+#include "Combat/TankGroundFire.h"
+#include "Combat/TankHealthComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "EngineUtils.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
@@ -63,7 +68,8 @@ ATankShellProjectile::ATankShellProjectile()
 	Movement->bShouldBounce = false;
 
 	TracerMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/TankGame/Materials/MI_Tank_Tracer.MI_Tank_Tracer")));
-	ImpactSound = TSoftObjectPtr<USoundBase>(FSoftObjectPath(TEXT("/Game/XRFramework/Audio/Fire_Cue.Fire_Cue")));
+	ImpactSound = TankAudio::Sound(TEXT("SW_Impact_AP"));
+	GroundImpactSound = TankAudio::Sound(TEXT("SW_Impact_Dirt"));
 }
 
 void ATankShellProjectile::BeginPlay()
@@ -81,8 +87,22 @@ void ATankShellProjectile::BeginPlay()
 			Collision->IgnoreActorWhenMoving(Rider, true);
 		}
 	}
+	if (FriendlyClass)
+	{
+		for (TActorIterator<AActor> It(GetWorld(), FriendlyClass); It; ++It)
+		{
+			Collision->IgnoreActorWhenMoving(*It, true);
+		}
+	}
 	if (UMaterialInterface* Material = TracerMaterial.LoadSynchronous())
 	{
+		if (!Tint.Equals(FLinearColor::Black))
+		{
+			UMaterialInstanceDynamic* Tinted = UMaterialInstanceDynamic::Create(Material, this);
+			Tinted->SetVectorParameterValue(TEXT("Color"), Tint);
+			Material = Tinted;
+			Light->SetLightColor(Tint);
+		}
 		Tracer->SetMaterial(0, Material);
 		ImpactFlash->SetMaterial(0, Material);
 	}
@@ -97,9 +117,21 @@ void ATankShellProjectile::Launch(const FVector& Direction, float Speed, AContro
 	Movement->Velocity = Direction.GetSafeNormal() * Speed;
 }
 
+void ATankShellProjectile::SetTracerScale(float Scale)
+{
+	Tracer->SetRelativeLocation(FVector(-25.0 * Scale, 0.0, 0.0));
+	Tracer->SetRelativeScale3D(FVector(0.6 * Scale, 0.07 * Scale, 0.07 * Scale));
+	Light->SetIntensity(40.0f * Scale);
+}
+
 void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	if (bHit)
+	{
+		return;
+	}
+	// A friendly vehicle driving into the round in flight (its own sweep reports the hit) doesn't count.
+	if (OtherActor && (OtherActor == GetOwner() || (FriendlyClass && OtherActor->IsA(FriendlyClass)) || (GetOwner() && OtherActor->IsAttachedTo(GetOwner()))))
 	{
 		return;
 	}
@@ -109,10 +141,26 @@ void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* 
 	{
 		UGameplayStatics::ApplyPointDamage(OtherActor, Damage, Direction, Hit, InstigatorController.Get(), this, DamageType);
 	}
-	if (USoundBase* Sound = ImpactSound.LoadSynchronous())
+	if (SplashRadius > 0.0f && SplashDamage > 0.0f)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, Hit.ImpactPoint, 1.0f, ImpactSoundPitch);
+		// The direct hit already counted, so the blast skips that actor.
+		TArray<AActor*> Ignore = { this, OtherActor };
+		if (AActor* Shooter = GetOwner())
+		{
+			Ignore.Add(Shooter);
+			Shooter->GetAttachedActors(Ignore, false, true);
+		}
+		UGameplayStatics::ApplyRadialDamageWithFalloff(this, SplashDamage, 0.0f, Hit.ImpactPoint + Hit.ImpactNormal * 20.0,
+			SplashRadius * 0.3f, SplashRadius, 1.0f, DamageType, Ignore, this, InstigatorController.Get(), ECC_Visibility);
 	}
+	if (GroundFireClass)
+	{
+		ATankGroundFire::StartBelow(GetWorld(), GroundFireClass, Hit.ImpactPoint + Hit.ImpactNormal * 20.0, GetOwner(), InstigatorController.Get());
+	}
+	// Steel on steel for a vehicle, earth and stones for anything else.
+	const bool bVehicle = OtherActor && OtherActor->FindComponentByClass<UTankHealthComponent>();
+	USoundBase* Sound = (bVehicle || GroundImpactSound.IsNull()) ? ImpactSound.LoadSynchronous() : GroundImpactSound.LoadSynchronous();
+	UTankAudioSubsystem::PlayAt(this, Sound, Hit.ImpactPoint, 0.85f, ImpactSoundPitch * FMath::FRandRange(0.95f, 1.05f), ImpactReach);
 	OnImpact.Broadcast(OtherActor, Hit.ImpactPoint);
 
 	// Stop and show the flash for a moment.
@@ -122,8 +170,9 @@ void ATankShellProjectile::HandleHit(UPrimitiveComponent* HitComponent, AActor* 
 	SetActorLocation(Hit.ImpactPoint);
 	Tracer->SetHiddenInGame(true);
 	ImpactFlash->SetHiddenInGame(false);
-	Light->SetIntensity(400.0f);
-	Light->SetAttenuationRadius(1500.0f);
+	FlashPeak = SplashRadius > 0.0f ? 900.0f : 400.0f;
+	Light->SetIntensity(FlashPeak);
+	Light->SetAttenuationRadius(SplashRadius > 0.0f ? 2500.0f : 1500.0f);
 	FlashTime = 0.0f;
 }
 
@@ -139,7 +188,7 @@ void ATankShellProjectile::Tick(float DeltaSeconds)
 	// Grows fast, then shrinks away.
 	const float Size = ImpactFlashSize * FMath::Sin(T * PI) * (1.0f - 0.4f * T);
 	ImpactFlash->SetWorldScale3D(FVector(FMath::Max(Size, 1.0f) / 100.0f));
-	Light->SetIntensity(400.0f * (1.0f - T));
+	Light->SetIntensity(FlashPeak * (1.0f - T));
 	if (T >= 1.0f)
 	{
 		Destroy();
