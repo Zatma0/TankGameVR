@@ -113,7 +113,7 @@ public:
 	TSoftObjectPtr<USoundBase> FireSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon|Feedback")
-	float FireSoundPitch = 0.6f;
+	float FireSoundPitch = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon|Feedback")
 	TSoftObjectPtr<UMaterialInterface> TracerMaterial;

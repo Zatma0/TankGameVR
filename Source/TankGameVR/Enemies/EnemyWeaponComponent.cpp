@@ -1,4 +1,5 @@
 #include "Enemies/EnemyWeaponComponent.h"
+#include "Audio/TankAudio.h"
 #include "Combat/TankSmokeCloud.h"
 #include "Weapons/TankShellProjectile.h"
 #include "Engine/World.h"
@@ -256,10 +257,7 @@ void UEnemyWeaponComponent::FireRound()
 			OnFired.Broadcast(Projectile);
 		}
 	}
-	if (USoundBase* Sound = FireSound.LoadSynchronous())
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, Start, 1.0f, FireSoundPitch);
-	}
+	UTankAudioSubsystem::PlayAt(this, FireSound.LoadSynchronous(), Start, 1.0f, FireSoundPitch * FMath::FRandRange(0.96f, 1.04f), 35000.0f);
 	if (Flash)
 	{
 		Flash->SetVisibility(true, true);

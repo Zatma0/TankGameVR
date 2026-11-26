@@ -1,4 +1,6 @@
 #include "Enemies/TankEnemyTypes.h"
+#include "Audio/TankAudio.h"
+#include "Audio/TankEnemyAudioComponent.h"
 #include "Combat/TankDamageTypes.h"
 #include "Combat/TankHealthComponent.h"
 #include "Enemies/EnemyDriveComponent.h"
@@ -13,7 +15,12 @@ ATankEnemy_Tank::ATankEnemy_Tank()
 {
 	EnemyType = ETankEnemyType::Tank;
 	KillScore = 100;
+	// Long main gun, about 2.5 m past the hull front like a real tank.
+	Muzzle->SetRelativeLocation(FVector(480.0, 0.0, 0.0));
+	Weapon->FireSound = TankAudio::Sound(TEXT("SW_Enemy_Cannon"));
+	Sounds->EnginePitch = 0.8f;
 	Health->DamageMultipliers.Add(UTankDamageType_HE::StaticClass(), 0.5f);
+	Health->DamageMultipliers.Add(UTankDamageType_Fire::StaticClass(), 0.5f);
 }
 
 void ATankEnemy_Tank::ApplyStats()
@@ -115,6 +122,9 @@ ATankEnemy_ArmoredCar::ATankEnemy_ArmoredCar()
 {
 	EnemyType = ETankEnemyType::ArmoredCar;
 	KillScore = 60;
+	Weapon->FireSound = TankAudio::Sound(TEXT("SW_Autocannon_Shot"));
+	Sounds->EnginePitch = 1.3f;
+	Sounds->EngineVolume = 0.6f;
 	Health->DamageMultipliers.Add(UTankDamageType_AP::StaticClass(), 0.6f);
 	Health->DamageMultipliers.Add(UTankDamageType_HE::StaticClass(), 1.5f);
 	FireRangeScale = 2.2f;
@@ -215,8 +225,12 @@ ATankEnemy_AntiTank::ATankEnemy_AntiTank()
 	// Long-range sniper: digs in well outside the table range if it can see us.
 	FireRangeScale = 1.8f;
 	KillScore = 150;
+	Weapon->FireSound = TankAudio::Sound(TEXT("SW_ATGun_Fire"));
+	Sounds->EnginePitch = 1.05f;
+	Sounds->EngineVolume = 0.45f;
 	Health->DamageMultipliers.Add(UTankDamageType_AP::StaticClass(), 0.5f);
 	Health->DamageMultipliers.Add(UTankDamageType_HE::StaticClass(), 1.5f);
+	Health->DamageMultipliers.Add(UTankDamageType_Fire::StaticClass(), 1.5f);
 	HullCollision->SetBoxExtent(FVector(160.0, 110.0, 50.0));
 	Drive->RideHeight = 55.0f;
 	TurretPivot->SetRelativeLocation(FVector(0.0, 0.0, 30.0));
