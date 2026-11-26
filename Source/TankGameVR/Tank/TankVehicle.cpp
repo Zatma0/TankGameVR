@@ -1,11 +1,16 @@
 #include "Tank/TankVehicle.h"
 #include "Tank/TankMovementComponent.h"
+#include "Tank/TankVisionConeComponent.h"
+#include "Audio/TankAudioComponent.h"
 #include "Cockpit/CockpitCigaretteComponent.h"
 #include "Cockpit/CockpitExtinguisherComponent.h"
 #include "Cockpit/CockpitFireComponent.h"
 #include "Cockpit/CockpitGrabUtils.h"
 #include "Cockpit/CockpitJoystickComponent.h"
 #include "Cockpit/CockpitSmokeLauncherComponent.h"
+#include "Cockpit/CockpitRadioComponent.h"
+#include "Cockpit/CockpitCableJoltComponent.h"
+#include "CableComponent.h"
 #include "Combat/TankDamageReactionComponent.h"
 #include "Combat/TankHealthComponent.h"
 #include "Weapons/TankBreechComponent.h"
@@ -45,6 +50,7 @@ ATankVehicle::ATankVehicle()
 	SetRootComponent(HullCollision);
 
 	TankMovement = CreateDefaultSubobject<UTankMovementComponent>(TEXT("TankMovement"));
+	TankMovement->RideHeight = 90.0f;
 	Targeting = CreateDefaultSubobject<UTankTargetingComponent>(TEXT("Targeting"));
 
 	TurretPivot = CreateDefaultSubobject<USceneComponent>(TEXT("TurretPivot"));
@@ -131,6 +137,23 @@ ATankVehicle::ATankVehicle()
 	SmokeLauncher->SetupAttachment(CockpitRoot);
 	SmokeLauncher->SetRelativeLocation(FVector(64.0, -50.0, 83.0));
 
+	// Radio set on the right wall ahead of the extinguisher; the handset hangs on its hook, the cord droops under it.
+	Radio = CreateDefaultSubobject<UCockpitRadioComponent>(TEXT("Radio"));
+	Radio->SetupAttachment(CockpitRoot);
+	Radio->SetRelativeLocation(FVector(20.0, 50.0, 82.0));
+	RadioCable = CreateDefaultSubobject<UCableComponent>(TEXT("RadioCable"));
+	RadioCable->SetupAttachment(CockpitRoot);
+	RadioCable->SetRelativeLocation(FVector(20.0, 54.0, 71.0));
+	RadioCable->bAttachEnd = true;
+	RadioCable->EndLocation = FVector(0.0, 0.0, -9.0);
+	RadioCable->CableLength = 50.0f;
+	RadioCable->NumSegments = 14;
+	RadioCable->SolverIterations = 4;
+	RadioCable->CableWidth = 1.2f;
+	RadioCable->NumSides = 6;
+	RadioCable->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CableJolt = CreateDefaultSubobject<UCockpitCableJoltComponent>(TEXT("CableJolt"));
+
 	// Where hits start fires: under the dashboard, in front of the ammo rack, the cable loom on the right wall.
 	auto MakeFireSpot = [this](const TCHAR* Name, const FVector& Location)
 	{
@@ -145,8 +168,13 @@ ATankVehicle::ATankVehicle()
 
 	Health = CreateDefaultSubobject<UTankHealthComponent>(TEXT("Health"));
 	Health->MaxHealth = 100.0f;
+	// The crew patches the hull up slowly whenever the tank is left alone for a moment.
+	Health->RepairPerSecond = 2.0f;
+	Health->RepairDelay = 6.0f;
 	Health->bDestroyOwnerOnDeath = false;
 	DamageReaction = CreateDefaultSubobject<UTankDamageReactionComponent>(TEXT("DamageReaction"));
+	VisionCone = CreateDefaultSubobject<UTankVisionConeComponent>(TEXT("VisionCone"));
+	Sounds = CreateDefaultSubobject<UTankAudioComponent>(TEXT("Sounds"));
 
 	// Overview camera behind and above the hull.
 	OverviewArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("OverviewArm"));
@@ -172,6 +200,9 @@ ATankVehicle::ATankVehicle()
 void ATankVehicle::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// After every component has started, so nothing re-ties it: the cord ends on the handset.
+	RadioCable->SetAttachEndToComponent(Radio);
 
 	// Tick order: sticks -> tank -> movement -> targeting
 	AddTickPrerequisiteComponent(DriveStick);
@@ -258,6 +289,14 @@ void ATankVehicle::OnSmoke(const FInputActionValue& Value)
 void ATankVehicle::OnExtinguish(const FInputActionValue& Value)
 {
 	Extinguisher->AutoSpray();
+}
+
+void ATankVehicle::OnRadio(const FInputActionValue& Value)
+{
+	if (!IsDestroyed())
+	{
+		Radio->Answer();
+	}
 }
 
 void ATankVehicle::OnToggleAimAssist(const FInputActionValue& Value)
@@ -359,7 +398,12 @@ void ATankVehicle::HandleBoarded(APawn* Pawn)
 	}
 	if (ExtinguishAction)
 	{
-		EnhancedInput->BindAction(ExtinguishAction, ETriggerEvent::Started, this, &ATankVehicle::OnExtinguish);
+		// Triggered, so holding the key keeps it spraying.
+		EnhancedInput->BindAction(ExtinguishAction, ETriggerEvent::Triggered, this, &ATankVehicle::OnExtinguish);
+	}
+	if (RadioAction)
+	{
+		EnhancedInput->BindAction(RadioAction, ETriggerEvent::Started, this, &ATankVehicle::OnRadio);
 	}
 	if (TriggerLeftAction)
 	{

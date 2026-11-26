@@ -13,6 +13,9 @@ class UCockpitCigaretteComponent;
 class UCockpitExtinguisherComponent;
 class UCockpitFireComponent;
 class UCockpitSmokeLauncherComponent;
+class UCockpitRadioComponent;
+class UCockpitCableJoltComponent;
+class UCableComponent;
 class UTankDamageReactionComponent;
 class UTankHealthComponent;
 class UCockpitJoystickComponent;
@@ -24,6 +27,8 @@ class UInputMappingContext;
 class UTankMovementComponent;
 class UTankSeatComponent;
 class UTankTargetingComponent;
+class UTankVisionConeComponent;
+class UTankAudioComponent;
 class UWidgetComponent;
 struct FInputActionValue;
 
@@ -77,6 +82,10 @@ public:
 	/** Button: hands-free extinguisher. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
 	TObjectPtr<UInputAction> ExtinguishAction;
+
+	/** Button: listen to the radio without lifting the handset. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
+	TObjectPtr<UInputAction> RadioAction;
 
 	/** VR triggers per hand: a hand holding the extinguisher sprays, otherwise the trigger fires the gun. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tank|Input")
@@ -146,6 +155,12 @@ public:
 	UCockpitSmokeLauncherComponent* GetSmokeLauncher() const { return SmokeLauncher; }
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	UCockpitRadioComponent* GetRadio() const { return Radio; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
+	UCableComponent* GetRadioCable() const { return RadioCable; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Cockpit")
 	TArray<UCockpitFireComponent*> GetFireSpots() const;
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
@@ -153,6 +168,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
 	UTankDamageReactionComponent* GetDamageReaction() const { return DamageReaction; }
+
+	/** What the player can see right now; enemies are brought in outside of it. */
+	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
+	UTankVisionConeComponent* GetVisionCone() const { return VisionCone; }
+
+	UFUNCTION(BlueprintPure, Category = "Tank|Audio")
+	UTankAudioComponent* GetSounds() const { return Sounds; }
 
 	UFUNCTION(BlueprintPure, Category = "Tank|Combat")
 	bool IsDestroyed() const;
@@ -241,6 +263,17 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
 	TObjectPtr<UCockpitSmokeLauncherComponent> SmokeLauncher;
 
+	/** Radio handset on the right wall (meshes and RadioGrab go under it). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitRadioComponent> Radio;
+
+	/** Cord from the radio set to the handset. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCableComponent> RadioCable;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
+	TObjectPtr<UCockpitCableJoltComponent> CableJolt;
+
 	/** Places that can catch fire when hit. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Cockpit")
 	TObjectPtr<UCockpitFireComponent> FireSpotA;
@@ -256,6 +289,13 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Combat")
 	TObjectPtr<UTankDamageReactionComponent> DamageReaction;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Combat")
+	TObjectPtr<UTankVisionConeComponent> VisionCone;
+
+	/** Engine, tracks, hits, beeps: what the crew hears. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|Audio")
+	TObjectPtr<UTankAudioComponent> Sounds;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Tank|View")
 	TObjectPtr<USpringArmComponent> OverviewArm;
@@ -275,6 +315,7 @@ private:
 	void OnLoadHE(const FInputActionValue& Value);
 	void OnSmoke(const FInputActionValue& Value);
 	void OnExtinguish(const FInputActionValue& Value);
+	void OnRadio(const FInputActionValue& Value);
 	void OnTriggerLeftPressed(const FInputActionValue& Value) { HandleTrigger(true, true); }
 	void OnTriggerLeftReleased(const FInputActionValue& Value) { HandleTrigger(true, false); }
 	void OnTriggerRightPressed(const FInputActionValue& Value) { HandleTrigger(false, true); }

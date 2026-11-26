@@ -150,9 +150,9 @@ def build_gun(bp):
     mesh(bp, "CasingStub", "Breech", CYLINDER, mat("MI_Ammo_Case"), (0, 0, 0), (12, 12, 6), (90.0, 0.0, 0.0))
     label(bp, "BreechLabel", "Breech", "LOAD", (-2, 0, 22), 3.5)
 
-    # Shown for a moment on each shot (the barrel is 350 cm long).
-    mesh(bp, "MuzzleFlash", "BarrelPivot", SPHERE, mat("MI_Tank_MuzzleFlash"), (375, 0, 0), (70, 45, 45))
-    point_light(bp, "MuzzleFlashLight", "BarrelPivot", (390, 0, 0), 300.0, 2500.0, rgb(255, 190, 110))
+    # Shown for a moment on each shot (the barrel is 500 cm long).
+    mesh(bp, "MuzzleFlash", "BarrelPivot", SPHERE, mat("MI_Tank_MuzzleFlash"), (530, 0, 0), (70, 45, 45))
+    point_light(bp, "MuzzleFlashLight", "BarrelPivot", (545, 0, 0), 300.0, 2500.0, rgb(255, 190, 110))
 
 
 def build_cigarette(bp):
@@ -210,7 +210,7 @@ def build_player_tank():
     mesh(bp, "TurretRing", "TurretPivot", CYLINDER, mat("MI_Tank_HullDark"), (0, 0, -65), (190, 190, 72))
     mesh(bp, "TurretBody", "TurretPivot", CYLINDER, mat("MI_Tank_Hull"), (0, 0, 0), (220, 220, 60))
     mesh(bp, "TurretHatch", "TurretPivot", CYLINDER, mat("MI_Tank_HullDark"), (-40, 30, 35), (60, 60, 10))
-    mesh(bp, "Barrel", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (175, 0, 0), (16, 16, 350), (90.0, 0.0, 0.0))
+    mesh(bp, "Barrel", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (255, 0, 0), (16, 16, 500), (90.0, 0.0, 0.0))
     mesh(bp, "BarrelMantlet", "BarrelPivot", CUBE, mat("MI_Tank_Barrel"), (5, 0, 0), (30, 50, 40))
 
     # Cockpit tub (seat-relative: the seat floor is the rider's tracking origin, eyes at ~120 cm).
@@ -342,9 +342,9 @@ def build_enemy_tank():
     mesh(bp, "TurretCupola", "TurretPivot", CYLINDER, mat("MI_Enemy_Hull"), (-35, 52, 40), (48, 48, 22))
     mesh(bp, "TurretAntenna", "TurretPivot", CYLINDER, mat("MI_Tank_Tracks"), (-130, -55, 90), (2, 2, 150))
     mesh(bp, "Mantlet", "BarrelPivot", CUBE, mat("MI_Enemy_Turret"), (5, 0, 0), (40, 70, 50))
-    mesh(bp, "Barrel", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (165, 0, 0), (16, 16, 310), (90.0, 0.0, 0.0))
-    mesh(bp, "BarrelEvacuator", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (190, 0, 0), (24, 24, 40), (90.0, 0.0, 0.0))
-    muzzle_flash(bp, (345, 0, 0), (80, 50, 50))
+    mesh(bp, "Barrel", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (245, 0, 0), (16, 16, 470), (90.0, 0.0, 0.0))
+    mesh(bp, "BarrelEvacuator", "BarrelPivot", CYLINDER, mat("MI_Tank_Barrel"), (270, 0, 0), (24, 24, 40), (90.0, 0.0, 0.0))
+    muzzle_flash(bp, (505, 0, 0), (80, 50, 50))
     wreck_fire(bp, (-60, 0, 90), (90, 90, 150))
     compile_save(bp)
     return bp
