@@ -9,6 +9,7 @@ class UBoxComponent;
 class UDataTable;
 class UEnemyDriveComponent;
 class UEnemyWeaponComponent;
+class UTankEnemyAudioComponent;
 class UMaterialInterface;
 class UStaticMeshComponent;
 class UTankHealthComponent;
@@ -44,6 +45,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Stats")
 	TSoftObjectPtr<UDataTable> StatsTable;
+
+	/** StatsTable if that asset exists, otherwise Ugurkan's DT_EnemyFeatures wherever it is. */
+	UFUNCTION(BlueprintPure, Category = "Enemy|Stats")
+	UDataTable* FindStatsTable() const;
+
+	/** Ugurkan's DT_EnemyFeatures. He has moved it once, so both places are checked. */
+	static UDataTable* FindDefaultStatsTable();
 
 	/** Empty = the default row for EnemyType. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Enemy|Stats")
@@ -164,6 +172,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UEnemyDriveComponent> Drive;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
+	TObjectPtr<UTankEnemyAudioComponent> Sounds;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UEnemyWeaponComponent> Weapon;

@@ -1,4 +1,5 @@
 #include "Enemies/TankEnemy.h"
+#include "Audio/TankEnemyAudioComponent.h"
 #include "Combat/TankHealthComponent.h"
 #include "Enemies/EnemyDriveComponent.h"
 #include "Enemies/EnemyWeaponComponent.h"
@@ -12,7 +13,27 @@
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/PackageName.h"
 #include "NavigationSystem.h"
+
+namespace
+{
+	// Ugurkan's enemy table: where it is now and where it was before he moved it.
+	const TCHAR* const EnemyTablePackages[] =
+	{
+		TEXT("/Game/TankGame/Ugurkan/BPs/Gameplay/EnemyInfos/DT_EnemyFeatures"),
+		TEXT("/Game/TankGame/Ugurkan/BPs/EnemyInfos/DT_EnemyFeatures"),
+	};
+
+	UDataTable* LoadTableIfThere(const FString& Package)
+	{
+		if (Package.IsEmpty() || !FPackageName::DoesPackageExist(Package))
+		{
+			return nullptr;
+		}
+		return LoadObject<UDataTable>(nullptr, *(Package + TEXT(".") + FPackageName::GetShortName(Package)));
+	}
+}
 
 ATankEnemy::ATankEnemy()
 {
@@ -51,12 +72,13 @@ ATankEnemy::ATankEnemy()
 	Health->bDestroyOwnerOnDeath = false;
 
 	Drive = CreateDefaultSubobject<UEnemyDriveComponent>(TEXT("Drive"));
+	Sounds = CreateDefaultSubobject<UTankEnemyAudioComponent>(TEXT("Sounds"));
 	Drive->RideHeight = 70.0f;
 
 	Weapon = CreateDefaultSubobject<UEnemyWeaponComponent>(TEXT("Weapon"));
 	Weapon->FriendlyClass = ATankEnemy::StaticClass();
 
-	StatsTable = TSoftObjectPtr<UDataTable>(FSoftObjectPath(TEXT("/Game/TankGame/Ugurkan/BPs/EnemyInfos/DT_EnemyFeatures.DT_EnemyFeatures")));
+	StatsTable = TSoftObjectPtr<UDataTable>(FSoftObjectPath(FString(EnemyTablePackages[0]) + TEXT(".DT_EnemyFeatures")));
 	WreckMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/TankGame/Materials/MI_Enemy_Wreck.MI_Enemy_Wreck")));
 }
 
@@ -87,9 +109,27 @@ void ATankEnemy::BeginPlay()
 	FindPlayer();
 }
 
+UDataTable* ATankEnemy::FindDefaultStatsTable()
+{
+	for (const TCHAR* Package : EnemyTablePackages)
+	{
+		if (UDataTable* Table = LoadTableIfThere(Package))
+		{
+			return Table;
+		}
+	}
+	return nullptr;
+}
+
+UDataTable* ATankEnemy::FindStatsTable() const
+{
+	UDataTable* Table = LoadTableIfThere(StatsTable.GetLongPackageName());
+	return Table ? Table : FindDefaultStatsTable();
+}
+
 void ATankEnemy::LoadStats()
 {
-	if (const UDataTable* Table = StatsTable.LoadSynchronous())
+	if (const UDataTable* Table = FindStatsTable())
 	{
 		const FName Row = StatsRow.IsNone() ? UTankEnemyStatsLibrary::GetDefaultRowName(EnemyType) : StatsRow;
 		bStatsLoaded = UTankEnemyStatsLibrary::ReadEnemyStats(Table, Row, Stats);

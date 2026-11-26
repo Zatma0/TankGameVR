@@ -5,6 +5,7 @@
 #include "Enemies/TankEnemy.h"
 #include "Enemies/TankEnemyTypes.h"
 #include "Game/TankEnemySpawnPoint.h"
+#include "Tank/TankVisionConeComponent.h"
 #include "Tank/TankVehicle.h"
 #include "TankGameVR.h"
 #include "Components/BillboardComponent.h"
@@ -49,7 +50,7 @@ void ATankArenaDirector::BeginPlay()
 {
 	Super::BeginPlay();
 	BindPlayer();
-	if (bAutoStart)
+	if (bAutoStart || bExternalWaves)
 	{
 		StartGame();
 	}
@@ -87,7 +88,68 @@ void ATankArenaDirector::StartGame()
 	Score = 0;
 	Kills = 0;
 	Queue.Reset();
-	SetPhase(ETankArenaPhase::Break, FirstWaveDelay);
+	if (bExternalWaves)
+	{
+		// The other spawner sends the enemies; we just keep score.
+		SetPhase(ETankArenaPhase::Fighting);
+	}
+	else
+	{
+		SetPhase(ETankArenaPhase::Break, FirstWaveDelay);
+	}
+}
+
+void ATankArenaDirector::SetExternalWaves(bool bExternal)
+{
+	if (bExternalWaves == bExternal)
+	{
+		return;
+	}
+	bExternalWaves = bExternal;
+	if (!HasActorBegunPlay())
+	{
+		return;
+	}
+	if (!bExternal)
+	{
+		StartGame();
+	}
+	else if (Phase != ETankArenaPhase::GameOver)
+	{
+		// Our own waves stop; whatever is already out stays.
+		Queue.Reset();
+		SetPhase(ETankArenaPhase::Fighting);
+	}
+}
+
+void ATankArenaDirector::SetExternalWaveNumber(int32 Number)
+{
+	if (bExternalWaves)
+	{
+		Wave = FMath::Max(0, Number);
+	}
+}
+
+FTransform ATankArenaDirector::FindEnemySpotNear(FVector Wanted, ETankEnemyType Type)
+{
+	const FVector PlayerLocation = Player.IsValid() ? Player->GetActorLocation() : GetActorLocation();
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ArenaSpotNear), false);
+	const bool bGround = GetWorld()->LineTraceSingleByObjectType(Hit, Wanted + FVector(0, 0, 200), Wanted - FVector(0, 0, 50000), FCollisionObjectQueryParams(ECC_WorldStatic), Params)
+		&& !Hit.bStartPenetrating;
+	const bool bInView = bSpawnOutOfSight && bGround && PlayerCanSee(Hit.ImpactPoint + FVector(0, 0, 150));
+	if (bGround && !bInView && Hit.ImpactNormal.Z >= 0.94 && FVector::Dist2D(Hit.ImpactPoint, PlayerLocation) >= MinDistanceFromPlayer * 0.5f && IsSpotFree(Hit.ImpactPoint, 300.0f))
+	{
+		const FRotator Facing(0.0f, (PlayerLocation - Hit.ImpactPoint).GetSafeNormal2D().Rotation().Yaw, 0.0f);
+		return FTransform(Facing, Hit.ImpactPoint + FVector(0, 0, 150));
+	}
+	// In the air above a roof, inside a building, on a cliff, on top of us or in plain view: come in the usual way.
+	FTransform Out;
+	if (FindSpawnTransform(Type, Out))
+	{
+		return Out;
+	}
+	return FTransform(bGround ? Hit.ImpactPoint + FVector(0, 0, 150) : Wanted);
 }
 
 void ATankArenaDirector::ClearEnemies()
@@ -170,6 +232,7 @@ void ATankArenaDirector::BeginWave(int32 WaveNumber)
 		Queue.Add(ETankEnemyType::ArmoredCar);
 	}
 	SpawnTimer = 0.0f;
+	GroupLeft = 0;
 	WaveTime = 0.0f;
 	SetPhase(ETankArenaPhase::Fighting);
 	UE_LOG(LogTankGame, Log, TEXT("Wave %d: %d tanks, %d armored cars, %d AT guns"), Wave, Setup.Tanks, Setup.ArmoredCars, Setup.AntiTankGuns);
@@ -181,20 +244,24 @@ bool ATankArenaDirector::IsSpotFree(const FVector& Location, float Radius) const
 	return !GetWorld()->OverlapAnyTestByChannel(Location + FVector(0, 0, Radius + 40.0f), FQuat::Identity, ECC_Visibility, FCollisionShape::MakeSphere(Radius), Params);
 }
 
-bool ATankArenaDirector::FindSpawnTransform(ETankEnemyType Type, FTransform& Out)
+bool ATankArenaDirector::FindSpawnTransform(ETankEnemyType Type, FTransform& Out, bool bPreferInSight)
 {
 	const FVector PlayerLocation = Player.IsValid() ? Player->GetActorLocation() : GetActorLocation();
 	auto Facing = [&](const FVector& Location)
 	{
 		return FRotator(0.0f, (PlayerLocation - Location).GetSafeNormal2D().Rotation().Yaw, 0.0f);
 	};
-	auto Ground = [&](FVector Location)
+	auto Ground = [&](FVector Location, FVector* OutNormal = nullptr)
 	{
 		FHitResult Hit;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(ArenaSpawnGround), false);
 		if (GetWorld()->LineTraceSingleByObjectType(Hit, Location + FVector(0, 0, 2000), Location - FVector(0, 0, 4000), FCollisionObjectQueryParams(ECC_WorldStatic), Params))
 		{
 			Location.Z = Hit.ImpactPoint.Z;
+			if (OutNormal)
+			{
+				*OutNormal = Hit.ImpactNormal;
+			}
 		}
 		return Location;
 	};
@@ -213,6 +280,18 @@ bool ATankArenaDirector::FindSpawnTransform(ETankEnemyType Type, FTransform& Out
 			Points.Add(*It);
 		}
 	}
+	if (bSpawnOutOfSight && Points.Num() > 0)
+	{
+		// The ones the player is not looking at, if there are any.
+		const TArray<ATankEnemySpawnPoint*> Hidden = Points.FilterByPredicate([&](const ATankEnemySpawnPoint* Point)
+		{
+			return !PlayerCanSee(Ground(Point->GetActorLocation()) + FVector(0, 0, 150));
+		});
+		if (Hidden.Num() > 0)
+		{
+			Points = Hidden;
+		}
+	}
 	if (Points.Num() > 0)
 	{
 		ATankEnemySpawnPoint* Point = Points[FMath::RandRange(0, Points.Num() - 1)];
@@ -224,8 +303,13 @@ bool ATankArenaDirector::FindSpawnTransform(ETankEnemyType Type, FTransform& Out
 
 	// No spawn points (or all busy): a free spot on a ring around the player.
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	for (int32 Attempt = 0; Attempt < 16; ++Attempt)
+	const double PlayerGroundZ = Ground(PlayerLocation).Z;
+	for (int32 Attempt = 0; Attempt < 32; ++Attempt)
 	{
+		// For the first half of the tries insist on a spot that can see the player.
+		const bool bNeedSight = bPreferInSight && Attempt < 16;
+		// And for most of them on one the player is not looking at.
+		const bool bNeedHidden = bSpawnOutOfSight && Attempt < 24;
 		const float Yaw = FMath::FRandRange(0.0f, 360.0f);
 		const float Distance = FMath::Max(MinDistanceFromPlayer, FMath::FRandRange(FallbackSpawnDistance.X, FallbackSpawnDistance.Y));
 		FVector Location = PlayerLocation + FRotator(0.0f, Yaw, 0.0f).Vector() * Distance;
@@ -234,8 +318,24 @@ bool ATankArenaDirector::FindSpawnTransform(ETankEnemyType Type, FTransform& Out
 		{
 			Location = Projected.Location;
 		}
-		Location = Ground(Location);
-		if (FVector::Dist2D(Location, PlayerLocation) >= MinDistanceFromPlayer && IsSpotFree(Location, 300.0f))
+		FVector Normal = FVector::UpVector;
+		Location = Ground(Location, &Normal);
+		// Not on a hillside, and not far above or below us (a roof, a cliff top, a pit).
+		const bool bLevel = Normal.Z >= 0.94 && FMath::Abs(Location.Z - PlayerGroundZ) <= 0.25 * Distance;
+		if (bNeedSight)
+		{
+			FHitResult Blocker;
+			FCollisionQueryParams Sight(SCENE_QUERY_STAT(ArenaSpawnSight), false, Player.Get());
+			if (GetWorld()->LineTraceSingleByObjectType(Blocker, Location + FVector(0, 0, 200), PlayerLocation + FVector(0, 0, 100), FCollisionObjectQueryParams(ECC_WorldStatic), Sight))
+			{
+				continue;
+			}
+		}
+		if (bNeedHidden && PlayerCanSee(Location + FVector(0, 0, 150)))
+		{
+			continue;
+		}
+		if (bLevel && FVector::Dist2D(Location, PlayerLocation) >= MinDistanceFromPlayer && IsSpotFree(Location, 300.0f))
 		{
 			Out = FTransform(Facing(Location), Location + FVector(0, 0, 150));
 			return true;
@@ -270,18 +370,46 @@ ATankEnemy* ATankArenaDirector::SpawnEnemy(ETankEnemyType Type, FTransform Trans
 	return Enemy;
 }
 
-void ATankArenaDirector::SpawnNext()
+bool ATankArenaDirector::SpawnNext()
 {
-	if (Queue.Num() == 0)
-	{
-		return;
-	}
 	FTransform Transform;
-	if (FindSpawnTransform(Queue[0], Transform))
+	if (Queue.Num() == 0 || !FindSpawnTransform(Queue[0], Transform))
 	{
-		SpawnEnemy(Queue[0], Transform);
-		Queue.RemoveAt(0);
+		return false;
 	}
+	SpawnEnemy(Queue[0], Transform);
+	Queue.RemoveAt(0);
+	return true;
+}
+
+bool ATankArenaDirector::PlayerCanSee(FVector Point) const
+{
+	const UTankVisionConeComponent* Vision = Player.IsValid() ? Player->GetVisionCone() : nullptr;
+	return Vision && Vision->CanSee(Point);
+}
+
+FTransform ATankArenaDirector::GetHiddenSpawnTransform(ETankEnemyType Type, bool& bOutOfSight)
+{
+	BindPlayer();
+	FTransform Out;
+	if (!FindSpawnTransform(Type, Out))
+	{
+		// Nowhere free: at least put it behind the player.
+		FVector Eye = GetActorLocation();
+		FVector Looking = FVector::ForwardVector;
+		if (const UTankVisionConeComponent* Vision = Player.IsValid() ? Player->GetVisionCone() : nullptr)
+		{
+			Vision->GetView(Eye, Looking);
+		}
+		Out = FTransform((Looking).Rotation(), Eye - Looking * FallbackSpawnDistance.X);
+	}
+	bOutOfSight = !PlayerCanSee(Out.GetLocation());
+	return Out;
+}
+
+FTransform ATankArenaDirector::GetHiddenSpawnTransformByIndex(int32 TypeIndex, bool& bOutOfSight)
+{
+	return GetHiddenSpawnTransform(static_cast<ETankEnemyType>(FMath::Clamp(TypeIndex, 0, 2)), bOutOfSight);
 }
 
 void ATankArenaDirector::HandleEnemyDied(UTankHealthComponent* HealthComponent, AActor* Killer)
@@ -331,6 +459,10 @@ TArray<ATankEnemy*> ATankArenaDirector::GetEnemies() const
 
 FString ATankArenaDirector::GetMessage() const
 {
+	if (bExternalWaves && Phase == ETankArenaPhase::Fighting)
+	{
+		return FString();
+	}
 	const int32 Left = FMath::Max(0, FMath::CeilToInt(PhaseDuration - PhaseTime));
 	switch (Phase)
 	{
@@ -378,6 +510,63 @@ FString ATankArenaDirector::GetStatusLine() const
 	return FString::Printf(TEXT("WAVE %d  ENEMY %d  SCORE %d"), Wave, GetEnemiesLeft(), Score);
 }
 
+void ATankArenaDirector::BringBackLostEnemies(float DeltaSeconds)
+{
+	if (LostEnemyTimeout <= 0.0f)
+	{
+		return;
+	}
+	for (auto It = LostChecks.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	for (const TWeakObjectPtr<ATankEnemy>& Entry : Enemies)
+	{
+		ATankEnemy* Enemy = Entry.Get();
+		if (!Enemy || Enemy->IsWrecked())
+		{
+			continue;
+		}
+		FLostCheck& Check = LostChecks.FindOrAdd(Enemy);
+		const FVector Location = Enemy->GetActorLocation();
+		if (Enemy->GetWeapon()->HasLineOfSight())
+		{
+			Check = FLostCheck();
+			continue;
+		}
+		FTransform Transform;
+		if (Enemy->EnemyType == ETankEnemyType::AntiTank)
+		{
+			// AT guns sit still, so one dug in where it never sees us would hold the wave up: it moves to a new spot.
+			Check.Hidden += DeltaSeconds;
+			if (Check.Hidden > LostEnemyTimeout * 1.5f && FindSpawnTransform(Enemy->EnemyType, Transform, true))
+			{
+				UE_LOG(LogTankGame, Log, TEXT("%s never saw the player, moved to a new spot"), *Enemy->GetName());
+				Enemy->GetDrive()->Teleport(Transform.GetLocation(), Transform.Rotator());
+				Check = FLostCheck();
+			}
+			continue;
+		}
+		if (Check.Time <= 0.0f || FVector::Dist2D(Location, Check.Anchor) > 300.0)
+		{
+			Check.Anchor = Location;
+			Check.Time = KINDA_SMALL_NUMBER;
+		}
+		Check.Time += DeltaSeconds;
+		Check.Hidden += DeltaSeconds;
+		// Standing still behind something, or driving around without ever finding us.
+		if ((Check.Time > LostEnemyTimeout || Check.Hidden > LostEnemyTimeout * 2.0f) && FindSpawnTransform(Enemy->EnemyType, Transform, true))
+		{
+			UE_LOG(LogTankGame, Log, TEXT("%s could not reach the player, brought back in"), *Enemy->GetName());
+			Enemy->GetDrive()->Teleport(Transform.GetLocation(), Transform.Rotator());
+			Check = FLostCheck();
+		}
+	}
+}
+
 void ATankArenaDirector::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -402,8 +591,21 @@ void ATankArenaDirector::Tick(float DeltaSeconds)
 		SpawnTimer -= DeltaSeconds;
 		if (Queue.Num() > 0 && SpawnTimer <= 0.0f)
 		{
-			SpawnTimer = SpawnInterval;
-			SpawnNext();
+			if (GroupLeft <= 0)
+			{
+				GroupLeft = FMath::RandRange(FMath::Max(1, SpawnGroupSize.X), FMath::Max(1, FMath::Max(SpawnGroupSize.X, SpawnGroupSize.Y)));
+			}
+			if (SpawnNext())
+			{
+				--GroupLeft;
+			}
+			// One or two come in together, then a pause before the next ones.
+			SpawnTimer = GroupLeft > 0 ? SpawnInterval : TimeBetweenGroups;
+		}
+		BringBackLostEnemies(DeltaSeconds);
+		if (bExternalWaves)
+		{
+			break;
 		}
 		if (GetEnemiesLeft() == 0)
 		{

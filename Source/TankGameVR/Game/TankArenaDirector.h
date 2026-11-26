@@ -67,15 +67,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves")
 	bool bAutoStart = true;
 
+	/** No NavMeshBoundsVolume in the level: build navigation in a box around the player (UTankLevelSetupSubsystem). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Level")
+	bool bCreateNavigationIfMissing = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Level", meta = (Units = "Centimeters"))
+	FVector AutoNavigationSize = FVector(40000.0, 40000.0, 12000.0);
+
+	/** Big meshes without simple collision get a blocking box, so nothing drives or shoots through them. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Level")
+	bool bBlockMeshesWithoutCollision = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves", meta = (Units = "Seconds"))
 	float FirstWaveDelay = 5.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves", meta = (Units = "Seconds"))
 	float TimeBetweenWaves = 8.0f;
 
-	/** Enemies of a wave arrive one after another. */
+	/** Time between the enemies of one group. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves", meta = (Units = "Seconds"))
 	float SpawnInterval = 1.5f;
+
+	/** A wave arrives in small groups: this many together (picked between the two numbers), then a pause. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves")
+	FIntPoint SpawnGroupSize = FIntPoint(1, 2);
+
+	/** Pause between two groups. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves", meta = (Units = "Seconds"))
+	float TimeBetweenGroups = 6.0f;
+
+	/** Enemies come in where the player is not looking (outside the tank's vision cone or behind cover). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Spawning")
+	bool bSpawnOutOfSight = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Waves", meta = (Units = "Seconds"))
 	float RestartDelay = 6.0f;
@@ -87,6 +110,10 @@ public:
 	/** Never spawn closer than this to the player. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Spawning", meta = (Units = "Centimeters"))
 	float MinDistanceFromPlayer = 2500.0f;
+
+	/** A tank or car stuck out of sight for this long (or just out of sight three times as long) comes back in somewhere else. 0 = never. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Spawning", meta = (ClampMin = "0.0", Units = "Seconds"))
+	float LostEnemyTimeout = 20.0f;
 
 	/** Without spawn points: ring around the player. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Spawning", meta = (Units = "Centimeters"))
@@ -105,6 +132,42 @@ public:
 	/** Spawns one enemy of a type at a transform and tracks it (score, wave). */
 	UFUNCTION(BlueprintCallable, Category = "Arena")
 	ATankEnemy* SpawnEnemy(ETankEnemyType Type, FTransform Transform);
+
+	/**
+	 * Another spawner decides the waves (e.g. Ugurkan's BP_EnemySpawner). This director then spawns nothing by
+	 * itself and only tracks the enemies, the score, game over and restart.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	void SetExternalWaves(bool bExternal);
+
+	UFUNCTION(BlueprintPure, Category = "Arena")
+	bool HasExternalWaves() const { return bExternalWaves; }
+
+	/** Wave number to show while another spawner runs the waves. */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	void SetExternalWaveNumber(int32 Number);
+
+	/**
+	 * A place for an enemy: Wanted put on the ground if that is free, level ground away from the player,
+	 * otherwise one of the usual spawn spots.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	FTransform FindEnemySpotNear(FVector Wanted, ETankEnemyType Type);
+
+	/**
+	 * A spawn spot the player is not looking at right now: one of the spawn points if the level has any, otherwise
+	 * level ground around the player. bOutOfSight is false if every possible spot was in view.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	FTransform GetHiddenSpawnTransform(ETankEnemyType Type, bool& bOutOfSight);
+
+	/** Same for a Blueprint with its own enemy enum: 0 tank, 1 armored car, 2 AT gun. */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	FTransform GetHiddenSpawnTransformByIndex(int32 TypeIndex, bool& bOutOfSight);
+
+	/** Can the player see this point right now (the player tank's vision cone). */
+	UFUNCTION(BlueprintPure, Category = "Arena")
+	bool PlayerCanSee(FVector Point) const;
 
 	UFUNCTION(BlueprintPure, Category = "Arena")
 	ETankArenaPhase GetPhase() const { return Phase; }
@@ -151,12 +214,21 @@ protected:
 private:
 	FTankWave GetWaveSetup(int32 WaveNumber) const;
 	void BeginWave(int32 WaveNumber);
-	void SpawnNext();
-	bool FindSpawnTransform(ETankEnemyType Type, FTransform& Out);
+	bool SpawnNext();
+	bool FindSpawnTransform(ETankEnemyType Type, FTransform& Out, bool bPreferInSight = false);
 	bool IsSpotFree(const FVector& Location, float Radius) const;
 	void BindPlayer();
 	void ClearEnemies();
 	void SetPhase(ETankArenaPhase NewPhase, float Duration = 0.0f);
+	void BringBackLostEnemies(float DeltaSeconds);
+
+	struct FLostCheck
+	{
+		FVector Anchor = FVector::ZeroVector;
+		float Time = 0.0f;
+		float Hidden = 0.0f;
+	};
+	TMap<TWeakObjectPtr<ATankEnemy>, FLostCheck> LostChecks;
 
 	TWeakObjectPtr<ATankVehicle> Player;
 	FTransform PlayerStart;
@@ -167,9 +239,11 @@ private:
 	float PhaseTime = 0.0f;
 	float PhaseDuration = 0.0f;
 	float SpawnTimer = 0.0f;
+	int32 GroupLeft = 0;
 	float WaveTime = 0.0f;
 	int32 Wave = 0;
 	int32 Score = 0;
 	int32 Kills = 0;
 	float LastRepair = 0.0f;
+	bool bExternalWaves = false;
 };
