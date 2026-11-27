@@ -205,14 +205,23 @@ The switches are on the director (`bCreateNavigationIfMissing`, `bBlockMeshesWit
 `Tank.LevelSetup 0` turns the whole thing off. Convex hulls count as simple collision; only meshes with none at all
 get a box.
 
-**A spawner of the level's own** (Ugurkan's `BP_EnemySpawner` with `BP_EnemyBase`). His Blueprints are not changed.
+**A spawner of the level's own** (Ugurkan's `BP_EnemySpawner` with `BP_EnemyBase`).
 Every `BP_EnemyBase` his spawner creates is swapped for the real enemy of that type (`SpawnedEnemyType`: tank,
 armored car, AT gun): his actor stays as a hidden stand-in attached to ours, and when ours is destroyed his
 `OnEnemyDied` dispatcher fires and the stand-in is removed. If his spawner removes its enemy, ours goes too.
 
-- Until his spawner has really produced an enemy the director runs its own waves. With his first enemy it hands the
-  waves over (`SetExternalWaves`): from then on his spawner decides when and what, the director only spawns the
-  vehicle, keeps score and handles game over and restart. The display shows his `WaveCount`.
+- His spawner tells the director at BeginPlay and at every `WaveBeginning` which wave it is and how long until the
+  next one (`SetExternalWave(Number, SecondsToNextWave)`). From then on his spawner decides when and what; the
+  director only spawns the vehicle, keeps score and handles game over and restart. Without such a call the director
+  runs its own waves until his first enemy appears, then hands over.
+- How his spawner picks: each wave raises three rates (`Max..._SpawnRateBase`: cars every wave, tanks every 3rd,
+  AT guns every 7th). `PickEnemyType` treats them as weights: roll 1..(sum of the rates); up to the car rate = car,
+  up to car + tank = tank, the rest = AT gun. Rates 3 / 1 / 0 give 75% cars, 25% tanks. `SpawnNextEnemy` sends
+  `MaxSpawnedEnemyValue` enemies one by one (`EnemyMinSpawnDelay`-`EnemyMaxSpawnDelay` apart), each to
+  `GetHiddenSpawnTransformByIndex`.
+- Wave panel: `WBP_HUDTimer` (parent `UTankWaveHudWidget`) shows wave, `NEXT WAVE m:ss` and the enemies still out by
+  type, top middle of the monitor; the spawner adds it with `ShowWaveHud`. In VR the same wave and timer are on the
+  cockpit display. A designed WBP can bind its own texts to `GetWaveText` / `GetTimerText` / `GetEnemiesText`.
 - The enemy appears where his spawner put it if that is free, level ground away from the player and out of the
   player's sight; otherwise at one of the usual spawn spots (also out of sight).
 - Any other Blueprint spawner can use the same hook: `SetPlaceholderEnemyClass(Class, TypeVariable, DiedEvent)`, or

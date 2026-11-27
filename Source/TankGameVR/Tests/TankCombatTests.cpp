@@ -20,6 +20,7 @@
 #include "Game/TankEnemySpawnPoint.h"
 #include "Game/TankLevelSetupSubsystem.h"
 #include "Testing/TankPlaceholderEnemyStub.h"
+#include "UI/TankWaveHudWidget.h"
 #include "NavigationSystem.h"
 #include "Settings/TankSettingsSubsystem.h"
 #include "Tank/TankVehicle.h"
@@ -958,6 +959,56 @@ bool FTankHiddenATGunMovesTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(FString::Printf(TEXT("found a spot that sees the tank after %.0f s (%.0f m from the hideout)"), Waited,
 		FVector::Dist2D(Gun->GetActorLocation(), Hideout) / 100.0), Gun->GetWeapon()->HasLineOfSight());
+	UGameplayStatics::DeleteGameInSlot(CombatTestSlot, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankExternalWaveTest, "Tank.Combat.SpawnerWaveTimerOnTheHud", TankTestFlags)
+bool FTankExternalWaveTest::RunTest(const FString& Parameters)
+{
+	FWorld Test;
+	ATankVehicle* Player = SpawnPlayer(Test);
+	Player->GetHealth()->DamageMultipliers.Add(UDamageType::StaticClass(), 0.0f);
+	UClass* DirectorClass = LoadBlueprintClass(TEXT("/Game/TankGame/Blueprints/Game/BP_TankArenaDirector"));
+	ATankArenaDirector* Director = Test.World->SpawnActorDeferred<ATankArenaDirector>(DirectorClass, FTransform::Identity);
+	Director->FirstWaveDelay = 60.0f;
+	Director->LostEnemyTimeout = 0.0f;
+	Director->FinishSpawning(FTransform::Identity);
+	Test.Tick(0.5f);
+
+	UTankWaveHudWidget* Hud = CreateWidget<UTankWaveHudWidget>(Test.World, UTankWaveHudWidget::StaticClass());
+	const TStrongObjectPtr<UTankWaveHudWidget> KeepHud(Hud);
+	Hud->UpdateTexts();
+	TestEqual(TEXT("before any wave"), Hud->GetWaveText().ToString(), FString(TEXT("GET READY")));
+	TestTrue(FString::Printf(TEXT("our own break counts down (%s)"), *Hud->GetTimerText().ToString()), Hud->GetTimerText().ToString().StartsWith(TEXT("NEXT WAVE 1:00")));
+
+	// A level spawner starts its third wave, 30 s long.
+	Director->SetExternalWave(3, 30.0f);
+	TestTrue(TEXT("the spawner now runs the waves"), Director->HasExternalWaves());
+	Test.Tick(10.0f);
+	TestTrue(FString::Printf(TEXT("20 s left (%.1f)"), Director->GetTimeToNextWave()), FMath::IsNearlyEqual(Director->GetTimeToNextWave(), 20.0f, 0.6f));
+
+	const FVector Spots[] = { FVector(4000, 0, 50), FVector(4000, 900, 50), FVector(4000, -900, 50) };
+	Director->SpawnEnemy(ETankEnemyType::ArmoredCar, FTransform(Spots[0]));
+	Director->SpawnEnemy(ETankEnemyType::ArmoredCar, FTransform(Spots[1]));
+	Director->SpawnEnemy(ETankEnemyType::Tank, FTransform(Spots[2]));
+	TestEqual(TEXT("two cars"), Director->CountEnemies(ETankEnemyType::ArmoredCar), 2);
+	TestEqual(TEXT("one tank"), Director->CountEnemies(ETankEnemyType::Tank), 1);
+	TestEqual(TEXT("no AT gun"), Director->CountEnemies(ETankEnemyType::AntiTank), 0);
+
+	Hud->UpdateTexts();
+	TestEqual(TEXT("wave line"), Hud->GetWaveText().ToString(), FString(TEXT("WAVE 3")));
+	TestTrue(FString::Printf(TEXT("timer line (%s)"), *Hud->GetTimerText().ToString()), Hud->GetTimerText().ToString().StartsWith(TEXT("NEXT WAVE 0:2")));
+	TestTrue(FString::Printf(TEXT("enemy line (%s)"), *Hud->GetEnemiesText().ToString()), Hud->GetEnemiesText().ToString().StartsWith(TEXT("TANKS 1   CARS 2   AT GUNS 0")));
+	TestTrue(FString::Printf(TEXT("cockpit line has the timer too (%s)"), *Director->GetStatusLine()), Director->GetStatusLine().Contains(TEXT("NEXT 0:")));
+
+	// The timer stops at zero and the spawner's next report starts it again.
+	Test.Tick(25.0f);
+	TestEqual(TEXT("not below zero"), Director->GetTimeToNextWave(), 0.0f);
+	Director->SetExternalWave(4, 60.0f);
+	Hud->UpdateTexts();
+	TestEqual(TEXT("next wave shown"), Hud->GetWaveText().ToString(), FString(TEXT("WAVE 4")));
+	TestTrue(TEXT("a minute"), Hud->GetTimerText().ToString().StartsWith(TEXT("NEXT WAVE 1:00")));
 	UGameplayStatics::DeleteGameInSlot(CombatTestSlot, 0);
 	return true;
 }

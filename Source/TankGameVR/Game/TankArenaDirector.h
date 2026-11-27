@@ -148,6 +148,21 @@ public:
 	void SetExternalWaveNumber(int32 Number);
 
 	/**
+	 * For a spawner that runs its own waves: the wave that has just started and how long until the next one
+	 * (0 = unknown). Hands the waves over to it like SetExternalWaves(true).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	void SetExternalWave(int32 Number, float SecondsToNextWave);
+
+	/** Seconds until the next wave starts, -1 if not known (our own waves: only during the break). */
+	UFUNCTION(BlueprintPure, Category = "Arena")
+	float GetTimeToNextWave() const;
+
+	/** Enemies of one type still fighting. */
+	UFUNCTION(BlueprintPure, Category = "Arena")
+	int32 CountEnemies(ETankEnemyType Type) const;
+
+	/**
 	 * A place for an enemy: Wanted put on the ground if that is free, level ground away from the player,
 	 * otherwise one of the usual spawn spots.
 	 */
@@ -246,4 +261,6 @@ private:
 	int32 Kills = 0;
 	float LastRepair = 0.0f;
 	bool bExternalWaves = false;
+	// World time the other spawner's next wave starts, < 0 if it did not say.
+	double ExternalNextWaveTime = -1.0;
 };

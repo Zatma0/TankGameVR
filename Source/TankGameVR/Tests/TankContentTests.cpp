@@ -9,6 +9,7 @@
 #include "Combat/TankDamageTypes.h"
 #include "Combat/TankHealthComponent.h"
 #include "Enemies/TankEnemy.h"
+#include "Game/TankArenaDirector.h"
 #include "Game/TankLevelSetupSubsystem.h"
 #include "Misc/PackageName.h"
 #include "Weapons/TankBreechComponent.h"
@@ -35,6 +36,7 @@
 #include "InputModifiers.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "MotionControllerComponent.h"
 #include "UObject/StructOnScope.h"
@@ -617,6 +619,146 @@ bool FTankUgurkanEnemyTest::RunTest(const FString& Parameters)
 	UGameplayStatics::ApplyDamage(Ours, 1000.0f, nullptr, nullptr, UTankDamageType_HE::StaticClass());
 	Test.Tick(0.3f);
 	TestFalse(TEXT("when ours is destroyed theirs goes too"), Placeholder.IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTankContentSpawnerTest, "Tank.Content.UgurkanSpawnerRatesAndWaves", TankTestFlags)
+bool FTankContentSpawnerTest::RunTest(const FString& Parameters)
+{
+	UClass* SpawnerClass = LoadBlueprintClass(TEXT("/Game/TankGame/Ugurkan/BPs/Gameplay/BP_EnemySpawner"));
+	if (!TestNotNull(TEXT("Ugurkan's BP_EnemySpawner loads"), SpawnerClass))
+	{
+		return false;
+	}
+	FWorld Test;
+	if (UTankSettingsSubsystem* Settings = UTankSettingsSubsystem::Get(Test.World))
+	{
+		Settings->SetSaveSlotForTesting(ContentTestSlot);
+	}
+	ON_SCOPE_EXIT { UGameplayStatics::DeleteGameInSlot(ContentTestSlot, 0); };
+	ATankVehicle* Player = SpawnPlayerTank(Test);
+	Player->GetHealth()->DamageMultipliers.Add(UDamageType::StaticClass(), 0.0f);
+	UClass* DirectorClass = LoadBlueprintClass(TEXT("/Game/TankGame/Blueprints/Game/BP_TankArenaDirector"));
+	ATankArenaDirector* Director = Test.World->SpawnActorDeferred<ATankArenaDirector>(DirectorClass, FTransform::Identity);
+	Director->LostEnemyTimeout = 0.0f;
+	Director->FinishSpawning(FTransform::Identity);
+	AActor* Spawner = Test.World->SpawnActor<AActor>(SpawnerClass, FTransform(FVector(0, 0, 200)));
+	Test.Tick(0.1f);
+
+	auto ReadInt = [Spawner](const TCHAR* Name)
+	{
+		const FIntProperty* Property = FindFProperty<FIntProperty>(Spawner->GetClass(), Name);
+		return Property ? Property->GetPropertyValue_InContainer(Spawner) : -1;
+	};
+	auto SetRates = [Spawner](int32 Car, int32 Tank, int32 AntiTank)
+	{
+		const TPair<const TCHAR*, int32> Rates[] = { { TEXT("MaxArmoredCar_SpawnRateBase"), Car }, { TEXT("MaxTank_SpawnRateBase"), Tank }, { TEXT("MaxAntiTank_SpawnRateBase"), AntiTank } };
+		for (const TPair<const TCHAR*, int32>& Rate : Rates)
+		{
+			if (const FIntProperty* Property = FindFProperty<FIntProperty>(Spawner->GetClass(), Rate.Key))
+			{
+				Property->SetPropertyValue_InContainer(Spawner, Rate.Value);
+			}
+		}
+	};
+	// Counts of PickEnemyType results by E_EnemyTypes index (0 tank, 1 car, 2 AT gun).
+	UFunction* PickFunction = Spawner->FindFunction(TEXT("PickEnemyType"));
+	if (!TestNotNull(TEXT("the spawner has PickEnemyType"), PickFunction))
+	{
+		return false;
+	}
+	auto Picks = [this, Spawner, PickFunction](int32 Count)
+	{
+		TArray<int32> Found = { 0, 0, 0 };
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			FStructOnScope Params(PickFunction);
+			Spawner->ProcessEvent(PickFunction, Params.GetStructMemory());
+			int64 Type = -1;
+			for (TFieldIterator<FProperty> It(PickFunction); It; ++It)
+			{
+				if (It->GetName() != TEXT("EnemyType"))
+				{
+					continue;
+				}
+				if (const FEnumProperty* Enum = CastField<FEnumProperty>(*It))
+				{
+					Type = Enum->GetUnderlyingProperty()->GetSignedIntPropertyValue(Enum->ContainerPtrToValuePtr<void>(Params.GetStructMemory()));
+				}
+				else if (const FByteProperty* Byte = CastField<FByteProperty>(*It))
+				{
+					Type = Byte->GetPropertyValue_InContainer(Params.GetStructMemory());
+				}
+			}
+			if (Type >= 0 && Type <= 2)
+			{
+				++Found[Type];
+			}
+			else
+			{
+				AddError(TEXT("PickEnemyType gave no type"));
+				break;
+			}
+		}
+		return Found;
+	};
+
+	// Rates are weights: 3 / 1 / 0 means three cars for every tank and no AT guns.
+	SetRates(3, 1, 0);
+	const int32 Rolls = 4000;
+	const TArray<int32> Mixed = Picks(Rolls);
+	const float CarShare = Mixed[1] / float(Rolls);
+	TestTrue(FString::Printf(TEXT("about 75%% cars (%.1f%%)"), CarShare * 100.0f), CarShare > 0.71f && CarShare < 0.79f);
+	TestTrue(FString::Printf(TEXT("about 25%% tanks (%d)"), Mixed[0]), Mixed[0] > Rolls * 0.21f && Mixed[0] < Rolls * 0.29f);
+	TestEqual(TEXT("no AT gun at rate 0"), Mixed[2], 0);
+	SetRates(0, 0, 5);
+	TestEqual(TEXT("only AT guns when only they have a rate"), Picks(200)[2], 200);
+	SetRates(0, 0, 0);
+	TestEqual(TEXT("all rates 0 falls back to tanks"), Picks(50)[0], 50);
+
+	// Back to the defaults and let the first wave come in: 10 s wait, wave starts, 3 s later enemies one by one.
+	SetRates(2, 0, 0);
+	Test.Tick(5.0f);
+	TestTrue(TEXT("the spawner told the director it runs the waves"), Director->HasExternalWaves());
+	TestEqual(TEXT("no wave yet"), Director->GetWave(), 0);
+	TestTrue(FString::Printf(TEXT("first wave in about 5 s (%.1f)"), Director->GetTimeToNextWave()), FMath::IsNearlyEqual(Director->GetTimeToNextWave(), 5.0f, 1.0f));
+
+	int32 MostAtOnce = 0;
+	int32 Enemies = 0;
+	for (int32 Step = 0; Step < 200 && Enemies < 3; ++Step)
+	{
+		const int32 Before = Enemies;
+		Test.Tick(0.1f);
+		Enemies = 0;
+		for (TActorIterator<ATankEnemy> It(Test.World); It; ++It)
+		{
+			++Enemies;
+		}
+		MostAtOnce = FMath::Max(MostAtOnce, Enemies - Before);
+	}
+	const int32 Expected = ReadInt(TEXT("MaxSpawnedEnemyValue"));
+	TestEqual(TEXT("first wave size worked out before it starts (1 x 3)"), Expected, 3);
+	TestEqual(TEXT("all of the first wave arrived"), Enemies, Expected);
+	TestEqual(TEXT("one at a time"), MostAtOnce, 1);
+	TestEqual(TEXT("the spawner counted them"), ReadInt(TEXT("SpawnedThisWave")), Expected);
+	int32 Cars = 0;
+	for (TActorIterator<ATankEnemy> It(Test.World); It; ++It)
+	{
+		Cars += It->EnemyType == ETankEnemyType::ArmoredCar ? 1 : 0;
+		TestFalse(FString::Printf(TEXT("%s came in out of the player's view"), *It->GetName()), Director->PlayerCanSee(It->GetActorLocation()));
+	}
+	TestEqual(TEXT("only cars have a rate in wave 1"), Cars, Expected);
+	TestEqual(TEXT("director shows wave 1"), Director->GetWave(), 1);
+	const float Next = Director->GetTimeToNextWave();
+	TestTrue(FString::Printf(TEXT("next wave after the 30 s timer and a 10 s break (%.1f s left)"), Next), Next > 15.0f && Next < 40.0f);
+
+	Test.Tick(3.0f);
+	int32 After = 0;
+	for (TActorIterator<ATankEnemy> It(Test.World); It; ++It)
+	{
+		++After;
+	}
+	TestEqual(TEXT("no more than the wave size"), After, Expected);
 	return true;
 }
 

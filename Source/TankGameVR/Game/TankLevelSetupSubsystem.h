@@ -82,13 +82,9 @@ private:
 	void HandleActorSpawned(AActor* Actor);
 	void WatchForPlaceholders();
 	void Replace(AActor* Placeholder);
-	void ReadSpawnerWave();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UClass> PlaceholderClass;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UClass> SpawnerClass;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> BlockerHolder;
@@ -96,11 +92,9 @@ private:
 	TArray<FSwap> Swaps;
 	TSet<TWeakObjectPtr<const UPrimitiveComponent>> BlockedMeshes;
 	TArray<TWeakObjectPtr<AActor>> Pending;
-	TWeakObjectPtr<AActor> Spawner;
 	FDelegateHandle SpawnHandle;
 	FName PlaceholderTypeProperty = TEXT("SpawnedEnemyType");
 	FName PlaceholderDiedEvent = TEXT("OnEnemyDied");
-	float WaveTimer = 0.0f;
 	int32 Replaced = 0;
 	int32 Blockers = 0;
 	bool bSetUp = false;

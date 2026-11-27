@@ -2,6 +2,8 @@
 #include "Combat/TankDamageReactionComponent.h"
 #include "Combat/TankHealthComponent.h"
 #include "Combat/TankSmokeCloud.h"
+#include "Enemies/EnemyDriveComponent.h"
+#include "Enemies/EnemyWeaponComponent.h"
 #include "Enemies/TankEnemy.h"
 #include "Enemies/TankEnemyTypes.h"
 #include "Game/TankEnemySpawnPoint.h"
@@ -128,6 +130,36 @@ void ATankArenaDirector::SetExternalWaveNumber(int32 Number)
 	{
 		Wave = FMath::Max(0, Number);
 	}
+}
+
+void ATankArenaDirector::SetExternalWave(int32 Number, float SecondsToNextWave)
+{
+	SetExternalWaves(true);
+	Wave = FMath::Max(0, Number);
+	ExternalNextWaveTime = SecondsToNextWave > 0.0f && GetWorld() ? GetWorld()->GetTimeSeconds() + SecondsToNextWave : -1.0;
+}
+
+float ATankArenaDirector::GetTimeToNextWave() const
+{
+	if (bExternalWaves)
+	{
+		return ExternalNextWaveTime >= 0.0 && GetWorld() ? FMath::Max(0.0f, static_cast<float>(ExternalNextWaveTime - GetWorld()->GetTimeSeconds())) : -1.0f;
+	}
+	return Phase == ETankArenaPhase::Break ? FMath::Max(0.0f, PhaseDuration - PhaseTime) : -1.0f;
+}
+
+int32 ATankArenaDirector::CountEnemies(ETankEnemyType Type) const
+{
+	int32 Count = 0;
+	for (const ETankEnemyType Queued : Queue)
+	{
+		Count += Queued == Type ? 1 : 0;
+	}
+	for (const TWeakObjectPtr<ATankEnemy>& Enemy : Enemies)
+	{
+		Count += (Enemy.IsValid() && !Enemy->IsWrecked() && Enemy->EnemyType == Type) ? 1 : 0;
+	}
+	return Count;
 }
 
 FTransform ATankArenaDirector::FindEnemySpotNear(FVector Wanted, ETankEnemyType Type)
@@ -506,6 +538,12 @@ FString ATankArenaDirector::GetStatusLine() const
 	if (Wave == 0)
 	{
 		return FString::Printf(TEXT("SCORE %d"), Score);
+	}
+	const float Next = bExternalWaves ? GetTimeToNextWave() : -1.0f;
+	if (Next >= 0.0f)
+	{
+		const int32 Seconds = FMath::CeilToInt(Next);
+		return FString::Printf(TEXT("WAVE %d  NEXT %d:%02d  ENEMY %d  SCORE %d"), Wave, Seconds / 60, Seconds % 60, GetEnemiesLeft(), Score);
 	}
 	return FString::Printf(TEXT("WAVE %d  ENEMY %d  SCORE %d"), Wave, GetEnemiesLeft(), Score);
 }

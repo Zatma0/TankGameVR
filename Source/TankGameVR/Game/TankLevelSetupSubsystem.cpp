@@ -27,8 +27,6 @@ namespace
 
 	// Ugurkan's Blueprints. Only looked up by name, so a checkout without them just skips that part.
 	const TCHAR* const PlaceholderEnemyPackage = TEXT("/Game/TankGame/Ugurkan/BPs/Gameplay/BP_EnemyBase");
-	const TCHAR* const SpawnerPackage = TEXT("/Game/TankGame/Ugurkan/BPs/Gameplay/BP_EnemySpawner");
-	const FName SpawnerWaveProperty(TEXT("WaveCount"));
 
 	UClass* LoadBlueprintClassIfThere(const FString& Package)
 	{
@@ -96,7 +94,6 @@ void UTankLevelSetupSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		PlaceholderClass = LoadBlueprintClassIfThere(PlaceholderEnemyPackage);
 	}
-	SpawnerClass = LoadBlueprintClassIfThere(SpawnerPackage);
 	WatchForPlaceholders();
 	// Only levels that are meant for the tank.
 	for (TActorIterator<ATankVehicle> It(&InWorld); It; ++It)
@@ -419,24 +416,6 @@ void UTankLevelSetupSubsystem::HandleActorDestroyed(AActor* Actor)
 	}
 }
 
-void UTankLevelSetupSubsystem::ReadSpawnerWave()
-{
-	UWorld* World = GetWorld();
-	if (!Spawner.IsValid() && SpawnerClass)
-	{
-		for (TActorIterator<AActor> It(World, SpawnerClass); It; ++It)
-		{
-			Spawner = *It;
-			break;
-		}
-	}
-	ATankArenaDirector* Director = Spawner.IsValid() ? ATankArenaDirector::GetDirector(World) : nullptr;
-	if (Director && Director->HasExternalWaves() && Spawner->GetClass()->FindPropertyByName(SpawnerWaveProperty))
-	{
-		Director->SetExternalWaveNumber(ReadIndex(Spawner.Get(), SpawnerWaveProperty));
-	}
-}
-
 void UTankLevelSetupSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -456,11 +435,5 @@ void UTankLevelSetupSubsystem::Tick(float DeltaTime)
 			Pending.RemoveAt(Index);
 			Replace(Placeholder);
 		}
-	}
-	WaveTimer -= DeltaTime;
-	if (WaveTimer <= 0.0f && SpawnerClass)
-	{
-		WaveTimer = 1.0f;
-		ReadSpawnerWave();
 	}
 }
